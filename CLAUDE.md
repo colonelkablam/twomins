@@ -117,14 +117,16 @@ beyond what's passed in. Styling only in `ui/style.py`.
 | Screen | Keys |
 |---|---|
 | Picker | type + Enter (new or exact match) · ↓ into list · Del let it go · Ctrl+R random · Esc close |
-| Shrink | Enter start · Tab next field · ↑/↓ or click a past action to reuse it (your typing is kept) · Esc back |
-| Timer | N note · D whole task done (any time) · Esc stop (still counts) · drag to move |
-| Finish | Enter keep going (focus mode) · S stop · D task done |
-| Focus mode | N note · S or Esc stop · D done |
-| After D | U undo (5 s) · Enter close now |
+| Shrink | Enter start · Tab next field · ↓ older / ↑ newer past action, or click one (your typing is kept) · Esc back |
+| Timer | N note · ⇧S or Esc stop (still counts) · ⇧D whole task done (any time) · drag to move |
+| Finish (clock keeps counting) | Enter keep going (focus mode) · 2 another round with a beep · ⇧S stop · ⇧D done |
+| Focus mode | N note · ⇧S or Esc stop · ⇧D done |
+| After ⇧D | U undo (5 s) · Enter close now |
 
 Single-letter keys are handled in `MiniTimer.keyPressEvent`, **not** with `QShortcut`.
-Otherwise typing in the notepad would trigger them.
+Otherwise typing in the notepad would trigger them. Ending a session (stop/done) needs **Shift**,
+and the beep only `raise_()`s the timer (no `activateWindow()`), so stray keys typed into another
+window can never end a session. `bring_forward()` (start, hotkey) is the only place that takes focus.
 
 **Never close a window from inside its own key or click handler.** Defer it with
 `QTimer.singleShot(0, ...)`. On Fedora, IBus delivers key events late, from Qt's queue of

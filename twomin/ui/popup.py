@@ -214,7 +214,7 @@ class ShrinkPage(QWidget):
     # ---- ↑/↓ cycle through earlier steps for this task (like shell history)
     def eventFilter(self, obj, e):
         if e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Up, Qt.Key_Down) and self.history:
-            self._recall(+1 if e.key() == Qt.Key_Up else -1)
+            self._recall(+1 if e.key() == Qt.Key_Down else -1)   # ↓ = down the list = older
             return True
         return super().eventFilter(obj, e)
 
@@ -232,7 +232,7 @@ class ShrinkPage(QWidget):
         self.past.setVisible(bool(self.history))
         if self.history:
             self.past_lab.setText(f"Past actions  ·  {starts} start{'s' * (starts != 1)}"
-                                  f"  ·  {_dur(secs)} on this task  ·  ↑↓ or click to reuse")
+                                  f"  ·  {_dur(secs)} on this task  ·  ↓↑ or click to reuse")
         self.past_lab.setVisible(bool(self.history))
         self.past.clearSelection()
 

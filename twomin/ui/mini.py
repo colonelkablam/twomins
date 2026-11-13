@@ -2,8 +2,12 @@
 
 Views (one QStackedWidget):
   RUN     the two-minute countdown; in focus mode the same view counts *up*, silently
-  FINISH  after the beep: keep going / stop here / whole task done
-  UNDO    a few seconds after "done", so a stray D can be taken back
+  FINISH  after the beep: time keeps counting while you choose (or ignore it)
+          keep going / +2 min / stop / whole task done
+  UNDO    a few seconds after "done", so a stray press can be taken back
+
+Stop and done need Shift (⇧S, ⇧D): the timer pops up at the beep, and a plain letter typed
+into another window must never end a session by accident.
 """
 from __future__ import annotations
 
@@ -31,10 +35,18 @@ def _lab(text: str, name: str, wrap: bool = True) -> QLabel:
     return lab
 
 
+def _btn(text: str, name: str = "", slot=None) -> QPushButton:
+    b = QPushButton(text, objectName=name)
+    b.setFocusPolicy(Qt.NoFocus)        # keys always go to the timer itself
+    if slot:
+        b.clicked.connect(slot)
+    return b
+
+
 class MiniTimer(QWidget):
     beeped = Signal()
     note = Signal(str)
-    finished = Signal(str, float, int)  # outcome, seconds, kept_going (0/1)
+    finished = Signal(str, float, int)  # outcome, seconds, extra (+2 rounds, +1 if focus mode)
 
     def __init__(self, title: str, steps: list[str], seconds: int = 120, starts_week: int = 1):
         super().__init__(None, Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -42,6 +54,7 @@ class MiniTimer(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setFixedWidth(340)
         self.clock = Countdown(seconds)
+        self.round_seconds = seconds
         self.focus_mode = False          # after "keep going": count up, never beep again
         self._beeped = False
         self._ending = False
@@ -80,38 +93,34 @@ class MiniTimer(QWidget):
         rl.addWidget(self.pad)
         self.saved = _lab("", "hint")
         rl.addWidget(self.saved)
-        done_run = QPushButton("Whole task done ✓   D", objectName="good")
-        done_run.setFocusPolicy(Qt.NoFocus)          # keep keys on the timer, not the button
-        done_run.clicked.connect(lambda: self._done())
-        rl.addWidget(done_run)
-        self.run_hint = _lab("N note  ·  D done  ·  Esc stop (still counts)  ·  drag", "hint")
-        rl.addWidget(self.run_hint)
+        rl.addWidget(_btn("Stop ✓   ⇧S", slot=self._stop))
+        rl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
+        rl.addWidget(_lab("N note  ·  Esc also stops (still counts)  ·  drag to move", "hint"))
         self.week_lab = _lab(_starts(starts_week), "hint")
         rl.addWidget(self.week_lab)
 
-        # --- FINISH: after the beep
+        # --- FINISH: after the beep. The clock keeps counting here.
         fin = QWidget()
         fl = QVBoxLayout(fin)
         fl.addWidget(_lab("You started. ✓", "win"))
         fl.addWidget(_lab(f"That's {_starts(starts_week)}. Stopping now is a win; "
                           "keep going only if you want to.", "muted"))
-        self.keep = QPushButton("Keep going   ⏎", objectName="primary")
-        self.stop = QPushButton("Stop here ✓   S")
-        self.done_btn = QPushButton("Whole task done ✓   D", objectName="good")
-        for b in (self.keep, self.stop, self.done_btn):
-            fl.addWidget(b)
-        self.keep.clicked.connect(self._keep_going)
-        self.stop.clicked.connect(lambda: self._finish(STOPPED))
-        self.done_btn.clicked.connect(lambda: self._done())
+        self.over_lab = _lab("", "step")
+        self.over_lab.setAlignment(Qt.AlignCenter)
+        fl.addWidget(self.over_lab)
+        fl.addWidget(_btn("Keep going   ⏎", "primary", self._keep_going))
+        rnd = f"{seconds // 60} min" if seconds % 60 == 0 else Countdown.fmt(seconds)
+        fl.addWidget(_btn(f"+{rnd}   2", slot=self._another_round))
+        fl.addWidget(_btn("Stop here ✓   ⇧S", slot=self._stop))
+        fl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
+        fl.addWidget(_lab("Enter: keep going, no more beeps  ·  2: another round", "hint"))
 
         # --- UNDO: a short grace period after "done"
         und = QWidget()
         ul = QVBoxLayout(und)
         ul.addWidget(_lab("Started and finished ✓", "win"))
         ul.addWidget(_lab(f"Whole task done. {_starts(starts_week)}.", "muted"))
-        undo = QPushButton("Undo   U")
-        undo.clicked.connect(self._undo)
-        ul.addWidget(undo)
+        ul.addWidget(_btn("Undo   U", slot=self._undo))
         ul.addWidget(_lab("Closes in a moment  ·  U undo  ·  Enter close now", "hint"))
         self.undo_timer = QTimer(self, singleShot=True, interval=UNDO_MS,
                                  timeout=lambda: self._finish(DONE))
@@ -134,6 +143,7 @@ class MiniTimer(QWidget):
         self.bring_forward()
 
     def bring_forward(self) -> None:
+        """Raise and take keyboard focus: only when the person asked (start, hotkey)."""
         self.raise_()
         self.activateWindow()
 
@@ -149,8 +159,12 @@ class MiniTimer(QWidget):
         self._resize()
 
     def _tick(self) -> None:
-        if self.stack.currentIndex() == UNDO:
+        view = self.stack.currentIndex()
+        if view == UNDO:
             return                                  # paused on screen; time still runs
+        if view == FINISH:
+            self.over_lab.setText(f"{Countdown.fmt(self.clock.elapsed())} so far · still counting")
+            return
         if self.focus_mode:
             self.time_lab.setText(Countdown.fmt(self.clock.elapsed()))
             return
@@ -158,10 +172,9 @@ class MiniTimer(QWidget):
         self.bar.setValue(int(self.clock.fraction_left() * 1000))
         if self.clock.finished() and not self._beeped:
             self._beeped = True
-            self.ticker.stop()
             self._show(FINISH)
-            self.keep.setFocus()
-            self.bring_forward()
+            self._tick()
+            self.raise_()          # visible, but don't steal focus from what you're typing in
             self.beeped.emit()
 
     def _show(self, view: int) -> None:
@@ -173,24 +186,25 @@ class MiniTimer(QWidget):
         if self._ending:
             return
         k, view = e.key(), self.stack.currentIndex()
+        shift = bool(e.modifiers() & Qt.ShiftModifier)
         enter = k in (Qt.Key_Return, Qt.Key_Enter)
         if view == UNDO:
             if k == Qt.Key_U:
                 self._undo()
-            elif enter or k in (Qt.Key_Escape, Qt.Key_D):
+            elif enter or k == Qt.Key_Escape or (shift and k == Qt.Key_D):
                 self._finish(DONE)
         elif k == Qt.Key_Escape:
             self._escape()
-        elif k == Qt.Key_D:                         # whole task done: any time
+        elif shift and k == Qt.Key_D:
             self._done()
+        elif shift and k == Qt.Key_S:
+            self._stop()
         elif view == RUN and k == Qt.Key_N:
             self._open_pad()
-        elif view == RUN and k == Qt.Key_S and self.focus_mode:
-            self._finish(STOPPED)
         elif view == FINISH and enter:
             self._keep_going()
-        elif view == FINISH and k == Qt.Key_S:
-            self._finish(STOPPED)
+        elif view == FINISH and k in (Qt.Key_2, Qt.Key_Plus, Qt.Key_Equal):
+            self._another_round()
         else:
             super().keyPressEvent(e)
 
@@ -200,11 +214,22 @@ class MiniTimer(QWidget):
         self.focus_mode = True
         self.bar.hide()
         self.flow_lab.show()
-        self.run_hint.setText("N note  ·  S or Esc stop ✓  ·  D done  ·  drag")
         self._show(RUN)
         self.setFocus()
-        self.ticker.start()
         self._tick()
+
+    def _another_round(self) -> None:
+        """+2 min: another countdown from now, with a beep at the end."""
+        self.clock.extend(self.round_seconds)
+        self._beeped = False
+        self._show(RUN)
+        self.setFocus()
+        self._tick()
+
+    def _stop(self) -> None:
+        early = (self.stack.currentIndex() == RUN and not self.focus_mode
+                 and not self._beeped and self.clock.extensions == 0)
+        self._finish(EARLY if early else STOPPED)
 
     def _escape(self) -> None:
         if self.pad.isVisible():
@@ -212,10 +237,8 @@ class MiniTimer(QWidget):
             self.pad.hide()
             self._resize()
             self.setFocus()
-        elif self.stack.currentIndex() == RUN and not self.focus_mode:
-            self._finish(EARLY)
         else:
-            self._finish(STOPPED)
+            self._stop()
 
     def _done(self) -> None:
         if self.stack.currentIndex() == UNDO:
@@ -255,7 +278,7 @@ class MiniTimer(QWidget):
         self._ending = True
         self.ticker.stop()
         self.undo_timer.stop()
-        result = (outcome, self.clock.elapsed(), int(self.focus_mode))
+        result = (outcome, self.clock.elapsed(), self.clock.extensions + int(self.focus_mode))
 
         def done() -> None:
             self.finished.emit(*result)
