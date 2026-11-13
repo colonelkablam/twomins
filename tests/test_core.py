@@ -29,5 +29,15 @@ def test_store():
     assert [t.id for t in s.open_tasks()] == [a.id] and s.starts_since() == 2
 
 
+def test_recent_steps():
+    s = Store(":memory:")
+    a = s.add_task("Book car service")
+    for steps in (["Search garages"], ["Open Smith's page", "Find Thu slot"], ["Search garages"]):
+        s.start_session(a.id, steps)
+    hist = [steps for _, steps in s.recent_steps(a.id)]
+    assert hist == [["Search garages"], ["Open Smith's page", "Find Thu slot"]]  # newest first, deduped
+    assert s.recent_steps(a.id, limit=1)[0][1] == ["Search garages"]
+
+
 if __name__ == "__main__":
-    test_countdown(); test_store(); print("ok")
+    test_countdown(); test_store(); test_recent_steps(); print("ok")

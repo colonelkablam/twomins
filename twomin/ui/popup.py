@@ -5,8 +5,9 @@ Emits `start(task_id, title, steps)` and `closed()`. Knows nothing about timers.
 from __future__ import annotations
 
 import random
+from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
@@ -99,6 +100,22 @@ class PickPage(QWidget):
         self.edit.selectAll()
 
 
+def _when(started: str) -> str:
+    """'2026-11-13 09:05:00' -> 'today', 'yesterday', 'Mon', or '3 Nov'."""
+    try:
+        d = datetime.strptime(started, "%Y-%m-%d %H:%M:%S").date()
+    except ValueError:
+        return started
+    days = (datetime.now().date() - d).days
+    if days <= 0:
+        return "today"
+    if days == 1:
+        return "yesterday"
+    if days < 7:
+        return d.strftime("%a")
+    return f"{d.day} {d.strftime('%b')}"
+
+
 class ShrinkPage(QWidget):
     go = Signal(list)
     back = Signal()
@@ -118,6 +135,8 @@ class ShrinkPage(QWidget):
         lay.addWidget(self.task_lab)
         lay.addWidget(_label("What's the smallest next physical action?", "title"))
         lay.addWidget(self.step1)
+        self.recall_hint = _label("", "hint")
+        lay.addWidget(self.recall_hint)
         lay.addWidget(_label("If it feels too small to count, you got it right.", "muted"))
         lay.addSpacing(6)
         lay.addWidget(_label("Takes less than 2 min? Line up one or two more:", "hint"))
@@ -130,10 +149,15 @@ class ShrinkPage(QWidget):
         row.addStretch(1)
         row.addWidget(start)
         lay.addLayout(row)
-        lay.addWidget(_label("Enter start  ·  Tab next box  ·  Esc back", "hint"))
+        lay.addWidget(_label("Enter start  ·  Tab next box  ·  ↑↓ earlier steps  ·  Esc back", "hint"))
+
+        self.history: list[tuple[str, list[str]]] = []
+        self.pos = -1                     # -1 = your own typing; 0.. = history entries
+        self.draft: list[str] = ["", "", ""]
 
         for e in (self.step1, self.step2, self.step3):
             e.returnPressed.connect(self._go)
+            e.installEventFilter(self)
         start.clicked.connect(self._go)
         back.clicked.connect(self.back)
 
@@ -141,15 +165,55 @@ class ShrinkPage(QWidget):
         self.task_lab.setText(f"Task: {task.title}")
         for e in (self.step1, self.step2, self.step3):
             e.clear()
+        self.history = self.store.recent_steps(task.id)
+        self.pos = -1
+        self._show_recall_hint()
         bits = []
-        if task.last_step:
-            bits.append(f"Last time: {task.last_step}")
         notes = self.store.notes_for(task.id)[-3:]
         if notes:
             bits.append("From your pad: " + "  ·  ".join(notes))
         self.context.setText("\n".join(bits))
         self.context.setVisible(bool(bits))
         self.step1.setFocus()
+
+    # ---- ↑/↓ cycle through earlier steps for this task (like shell history)
+    def eventFilter(self, obj, e):
+        if e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Up, Qt.Key_Down) and self.history:
+            self._recall(+1 if e.key() == Qt.Key_Up else -1)
+            return True
+        return super().eventFilter(obj, e)
+
+    def _boxes(self) -> tuple[QLineEdit, QLineEdit, QLineEdit]:
+        return (self.step1, self.step2, self.step3)
+
+    def _recall(self, delta: int) -> None:
+        new = max(-1, min(len(self.history) - 1, self.pos + delta))
+        if new == self.pos:
+            return
+        if self.pos == -1:                # leaving your own typing: keep it for ↓
+            self.draft = [b.text() for b in self._boxes()]
+        self.pos = new
+        texts = self.draft if new == -1 else (self.history[new][1] + ["", "", ""])[:3]
+        for box, text in zip(self._boxes(), texts):
+            box.setText(text)
+        self.step1.setFocus()
+        self.step1.end(False)
+        self._show_recall_hint()
+
+    def _show_recall_hint(self) -> None:
+        n = len(self.history)
+        if not n:
+            self.recall_hint.setVisible(False)
+            return
+        if self.pos == -1:
+            last = self.history[0][1][0]
+            more = f" · {n - 1} earlier" if n > 1 else ""
+            text = f"↑ carry on from last time: {last}{more}"
+        else:
+            when = _when(self.history[self.pos][0])
+            text = f"From {when} ({self.pos + 1} of {n}) · ↑ older · ↓ newer · edit freely"
+        self.recall_hint.setText(text)
+        self.recall_hint.setVisible(True)
 
     def _go(self) -> None:
         steps = [e.text().strip() for e in (self.step1, self.step2, self.step3) if e.text().strip()]

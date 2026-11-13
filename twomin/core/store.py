@@ -85,6 +85,23 @@ class Store:
         self.db.commit()
         return Session(cur.lastrowid, task_id, steps)
 
+    def recent_steps(self, task_id: int, limit: int = 10) -> list[tuple[str, list[str]]]:
+        """Step sets from earlier starts of a task, newest first, repeats removed.
+
+        Returns (started, steps) pairs; `started` is 'YYYY-MM-DD HH:MM:SS'.
+        """
+        out: list[tuple[str, list[str]]] = []
+        seen: set[str] = set()
+        for started, steps in self.db.execute(
+            "SELECT started, steps FROM sessions WHERE task_id=? ORDER BY id DESC", (task_id,)
+        ):
+            if steps and steps not in seen:
+                seen.add(steps)
+                out.append((started, steps.split("\n")))
+                if len(out) == limit:
+                    break
+        return out
+
     def end_session(self, session_id: int, seconds: float, extensions: int, outcome: str) -> None:
         self.db.execute(
             """UPDATE sessions SET ended=datetime('now','localtime'),

@@ -106,7 +106,7 @@ beyond what's passed in. Styling only in `ui/style.py`.
 | Screen | Keys |
 |---|---|
 | Picker | type + Enter (new or exact match) · ↓ into list · Ctrl+R random · Esc close |
-| Shrink | Enter start · Tab next field · Esc back |
+| Shrink | Enter start · Tab next field · ↑/↓ cycle earlier steps for this task (draft kept) · Esc back |
 | Timer | N note · Esc stop (still counts) · drag to move |
 | Finish | Enter keep going · S stop · D task done |
 
