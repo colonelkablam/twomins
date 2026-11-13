@@ -90,6 +90,19 @@ def test_flows_counted():
     assert s.flows_since(7) == (1, 480) and s.starts_since(7) == 2
 
 
+def test_week_totals():
+    s = Store(":memory:")
+    a = s.add_task("x")
+    old = s.start_session(a.id, ["a"]); s.end_session(old.id, 300, 0, STOPPED)
+    s.db.execute("UPDATE sessions SET started='2020-01-01 00:00:00' WHERE id=?", (old.id,))
+    new = s.start_session(a.id, ["b"]); s.end_session(new.id, 120, 0, STOPPED)
+    t = s.open_tasks()[0]
+    assert (t.starts, t.seconds, t.week_starts, t.week_seconds) == (2, 420, 1, 120)
+    assert s.time_since(7) == 120 and s.starts_since(7) == 1
+    s.rename_task(a.id, "  Renamed  ")
+    assert s.open_tasks()[0].title == "Renamed"
+
+
 if __name__ == "__main__":
     test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
-    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); print("ok")
+    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); print("ok")

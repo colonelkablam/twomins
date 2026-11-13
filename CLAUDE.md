@@ -114,6 +114,8 @@ beyond what's passed in. Styling only in `ui/style.py`.
 - **Picker list is short by design:** `open_tasks()` shows at most 5 tasks touched in the last 14
   days. Older ones fade without any flag; `search_open()` (used as soon as you type) covers all open
   tasks. `let_go` hides a task for good without calling it done.
+  The picker's top line shows the last 7 days (starts, time, flows) and each task shows its
+  totals: this week's if it has any, otherwise all-time "so far". Never a row of zeros.
 - **Schema changes:** append to `MIGRATIONS` in `store.py` (never edit a shipped entry). `_migrate()`
   runs them under `BEGIN IMMEDIATE`, because the hotkey process and the instance can open the DB at once.
 
@@ -173,6 +175,9 @@ Work in this order. Each item should be usable before starting the next.
   starts are tagged heavy, show one quiet line suggesting that dread needs its own approach
   (and a clinician if it's nearly every task), not a score.
 - **Maybe:** "reopen" a finished task when its title is typed again (keeps notes + step history).
+- **Later: Settings window** (tray menu). Timer length, full reset (wipe the DB, with a backup
+  file first), and a deletion tool for tasks (true delete lives here, not in the picker, where
+  Del only "lets go"). Keep it out of the start flow.
 
 ## Known gaps
 

@@ -26,6 +26,12 @@ QLineEdit {{
 }}
 QLineEdit:focus {{ border: 1px solid {ACCENT}; }}
 QLineEdit#optional {{ color: {FG}; }}
+QLineEdit#tasktitle {{
+    font-size: 13pt; font-weight: 600; background: transparent; border: 1px solid transparent;
+    padding: 2px 4px;
+}}
+QLineEdit#tasktitle:hover {{ border: 1px solid #3a3b45; }}
+QLineEdit#tasktitle:focus {{ background: {PANEL}; border: 1px solid {ACCENT}; }}
 QListWidget {{
     background: {PANEL}; border: 1px solid #3a3b45; border-radius: 8px; padding: 4px;
     outline: 0;

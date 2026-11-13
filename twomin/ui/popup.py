@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from ..core.models import Task
 from ..core.store import Store
+from .style import ACCENT, FLOW
 
 
 def _label(text: str, name: str = "", wrap: bool = True) -> QLabel:
@@ -38,7 +39,11 @@ class PickPage(QWidget):
         self.list = QListWidget()
         self.list.setFocusPolicy(Qt.StrongFocus)
 
+        self.week = _label("", "task")              # 10pt muted: visible, not loud
+        self.week.setTextFormat(Qt.RichText)
+
         lay = QVBoxLayout(self)
+        lay.addWidget(self.week)
         lay.addWidget(_label("What are you avoiding?", "title"))
         lay.addWidget(self.edit)
         self.list_lab = _label("", "muted")
@@ -61,6 +66,7 @@ class PickPage(QWidget):
         # Short on purpose: only recently touched tasks show. Older ones fade quietly and
         # are still found by typing (search covers every open task).
         self.tasks = self.store.open_tasks()
+        self._show_week()
         hidden = self.store.count_open() - len(self.tasks)
         self.list_lab.setText("Or carry on with one you've started"
                               + (" (type to find older ones):" if hidden > 0 else ":"))
@@ -70,12 +76,22 @@ class PickPage(QWidget):
         self.list.clear()
         needle = text.strip()
         for t in (self.store.search_open(needle) if needle else self.tasks):
-            sub = f"last: {t.last_step}  ·  {t.starts} start{'s' * (t.starts != 1)}" if t.starts else "not started yet"
+            sub = _task_line(t)
             it = QListWidgetItem(f"{t.title}\n    {sub}")
             it.setData(Qt.UserRole, t)
             self.list.addItem(it)
         if self.list.count():
             self.list.setCurrentRow(0)
+
+    def _show_week(self) -> None:
+        n, secs = self.store.starts_since(7), self.store.time_since(7)
+        if not n:                                    # never a row of zeros
+            self.week.setText("Last 7 days  ·  your next start counts")
+            return
+        f, _ = self.store.flows_since(7)
+        flows = f'  ·  <span style="color:{FLOW}">✦ {f} flow{"s" * (f != 1)}</span>' if f else ""
+        self.week.setText(f'Last 7 days  ·  <b style="color:{ACCENT}">{n} start{"s" * (n != 1)}</b>'
+                          f"  ·  {_dur(secs)}{flows}")
 
     def eventFilter(self, obj, ev):
         if ev.type() != ev.Type.KeyPress:
@@ -135,6 +151,17 @@ def _when(started: str) -> str:
     return f"{d.day} {d.strftime('%b')}"
 
 
+def _task_line(t: Task) -> str:
+    """Per-task totals, counted up. This week if there's anything this week, else all time."""
+    if not t.starts:
+        return "not started yet"
+    if t.week_starts:
+        tally = f"this week: {t.week_starts} start{'s' * (t.week_starts != 1)} · {_dur(t.week_seconds)}"
+    else:
+        tally = f"{t.starts} start{'s' * (t.starts != 1)} · {_dur(t.seconds)} so far"
+    return f"{tally}  ·  last: {t.last_step}"
+
+
 def _dur(seconds: int | float) -> str:
     m = int(seconds // 60)
     if m < 1:
@@ -149,11 +176,16 @@ class ShrinkPage(QWidget):
     def __init__(self, store: Store, seconds: int = 120):
         super().__init__()
         self.store = store
-        self.task_lab = _label("", "task")
         self.context = _label("", "hint")
         self.step1 = QLineEdit(placeholderText="e.g. open laptop, search “car service near me”")
         self.step2 = QLineEdit(placeholderText="then… (optional)", objectName="optional")
         self.step3 = QLineEdit(placeholderText="then… (optional)", objectName="optional")
+        # The task title is editable in place: click it (or ⇧Tab from the step box).
+        self.task: Task | None = None
+        self.title_edit = QLineEdit(objectName="tasktitle")
+        self.title_edit.setToolTip("Click to rename this task")
+        self.title_edit.returnPressed.connect(self.step1.setFocus)   # Enter here never starts
+        self.title_edit.editingFinished.connect(self._rename)
         start = QPushButton(f"Start {seconds // 60}:{seconds % 60:02d}  ▶", objectName="primary")
         back = QPushButton("← Back")
 
@@ -165,7 +197,8 @@ class ShrinkPage(QWidget):
         self.past.itemClicked.connect(lambda it: self._recall_to(self.past.row(it)))
 
         lay = QVBoxLayout(self)
-        lay.addWidget(self.task_lab)
+        lay.addWidget(_label("Task  ·  click to rename", "hint"))
+        lay.addWidget(self.title_edit)
         lay.addWidget(_label("What's the smallest next physical action?", "title"))
         lay.addWidget(_label("If it feels too small to count, you got it right.", "muted"))
         lay.addWidget(self.step1)
@@ -195,9 +228,14 @@ class ShrinkPage(QWidget):
             e.installEventFilter(self)
         start.clicked.connect(lambda: QTimer.singleShot(0, self._go))
         back.clicked.connect(self.back)
+        QWidget.setTabOrder(self.title_edit, self.step1)   # ⇧Tab from step 1 → rename
+        QWidget.setTabOrder(self.step1, self.step2)
+        QWidget.setTabOrder(self.step2, self.step3)
 
     def load(self, task: Task) -> None:
-        self.task_lab.setText(f"Task: {task.title}")
+        self.task = task
+        self.title_edit.setText(task.title)
+        self.title_edit.setCursorPosition(0)
         for e in (self.step1, self.step2, self.step3):
             e.clear()
         self.history = self.store.recent_steps(task.id)
@@ -220,6 +258,16 @@ class ShrinkPage(QWidget):
 
     def _boxes(self) -> tuple[QLineEdit, QLineEdit, QLineEdit]:
         return (self.step1, self.step2, self.step3)
+
+    def _rename(self) -> None:
+        new = self.title_edit.text().strip()
+        if not self.task or new == self.task.title:
+            return
+        if not new:                                   # empty: put the old title back
+            self.title_edit.setText(self.task.title)
+            return
+        self.store.rename_task(self.task.id, new)
+        self.task.title = new                         # same object the popup starts with
 
     def _fill_past(self, task: Task) -> None:
         self.past.clear()

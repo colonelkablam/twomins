@@ -9,6 +9,9 @@ class Task:
     title: str
     last_step: str | None = None
     starts: int = 0
+    seconds: int = 0          # all time on this task
+    week_starts: int = 0      # last 7 days
+    week_seconds: int = 0
 
 
 @dataclass

@@ -49,7 +49,11 @@ _OPEN = """
                (SELECT steps FROM sessions s WHERE s.task_id=t.id ORDER BY s.id DESC LIMIT 1),
                (SELECT COUNT(*) FROM sessions s WHERE s.task_id=t.id),
                COALESCE((SELECT MAX(started) FROM sessions s WHERE s.task_id=t.id),
-                        t.created) AS touched
+                        t.created) AS touched,
+               (SELECT COALESCE(SUM(seconds), 0) FROM sessions s WHERE s.task_id=t.id),
+               (SELECT COUNT(*) FROM sessions s WHERE s.task_id=t.id AND s.started >= ?),
+               (SELECT COALESCE(SUM(seconds), 0) FROM sessions s
+                 WHERE s.task_id=t.id AND s.started >= ?)
         FROM tasks t WHERE t.done=0 AND t.let_go=0 AND {where}
     ) WHERE touched >= ? ORDER BY touched DESC LIMIT ?
 """
@@ -90,8 +94,10 @@ class Store:
 
     def _query_open(self, where: str, args: tuple, fresh_days: int | None, limit: int) -> list[Task]:
         since = "" if fresh_days is None else _ago(fresh_days)
-        rows = self.db.execute(_OPEN.format(where=where), (*args, since, limit)).fetchall()
-        return [Task(r[0], r[1], (r[2] or "").split("\n")[0] or None, r[3]) for r in rows]
+        week = _ago(7)
+        rows = self.db.execute(_OPEN.format(where=where), (week, week, *args, since, limit)).fetchall()
+        return [Task(r[0], r[1], (r[2] or "").split("\n")[0] or None, r[3], r[5], r[6], r[7])
+                for r in rows]
 
     def open_tasks(self, limit: int = 5, fresh_days: int | None = 14) -> list[Task]:
         """The short list the picker shows: recently touched open tasks only.
@@ -108,6 +114,10 @@ class Store:
     def count_open(self) -> int:
         return self.db.execute(
             "SELECT COUNT(*) FROM tasks WHERE done=0 AND let_go=0").fetchone()[0]
+
+    def rename_task(self, task_id: int, title: str) -> None:
+        self.db.execute("UPDATE tasks SET title=? WHERE id=?", (title.strip(), task_id))
+        self.db.commit()
 
     def let_go(self, task_id: int) -> None:
         """Drop a task you no longer want to start. Not 'done', not a failure; history kept."""
@@ -198,6 +208,12 @@ class Store:
             "SELECT COUNT(*), COALESCE(SUM(flow_seconds), 0) FROM sessions "
             "WHERE flow_seconds > 0 AND started >= ?", (_ago(days),)).fetchone()
         return n, secs
+
+    def time_since(self, days: int = 7) -> int:
+        """Seconds spent across all starts in the last `days` days."""
+        return self.db.execute(
+            "SELECT COALESCE(SUM(seconds), 0) FROM sessions WHERE started >= ?",
+            (_ago(days),)).fetchone()[0]
 
     def starts_since(self, days: int = 7) -> int:
         since = _ago(days)
