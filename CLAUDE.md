@@ -26,10 +26,11 @@ Key ideas the app must keep:
 | Real permission to stop when the timer ends | Stopping is **always** a success. No streaks, no failure states, no guilt copy |
 | Go straight in, don't think | Enter starts immediately; no confirmation dialogs |
 | Offload to a sticky pad | `N` opens a notepad in the timer; notes are saved per task and shown next time |
-| Momentum after the beep | Finish: Keep going +2 / Stop here ✓ / Whole task done ✓ |
-| Once started, keeping going is easier than quitting | **v2**: open-ended "keep going" focus mode (see Principles) |
+| Momentum after the beep | Finish: Keep going / Stop here ✓ / Whole task done ✓ |
+| Once started, keeping going is easier than quitting | Focus mode: "Keep going" switches to a silent count-up; no more beeps |
+| Relief comes from starting, not avoiding | "Started ✓" the moment you press Enter; weekly start count on the timer, finish screen, tray |
 | If-then cues (implementation intentions) | **v3**: "If I [cue] → start [task]" |
-| Didn't start? Step wasn't small enough | **v2**: gentle "Cut the step in half?" |
+| Didn't start? Step wasn't small enough | **v2.1 (next)**: gentle "Cut the step in half?" |
 | Heavy (dread) vs boring | **v4**: optional tag; the app points elsewhere, it doesn't try to fix it |
 
 ## Principles (read before adding any feature)
@@ -75,10 +76,10 @@ twomin/
 ├── core/            # NO Qt imports — keep it testable
 │   ├── timer.py     # Countdown (monotonic clock, injectable for tests)
 │   ├── models.py    # Task, Session, outcome constants
-│   └── store.py     # SQLite: tasks, sessions, notes; starts_since()
+│   └── store.py     # SQLite + MIGRATIONS (PRAGMA user_version); short list, search, let_go
 ├── ui/
 │   ├── popup.py     # PickPage → ShrinkPage; emits start(task_id, title, steps)
-│   ├── mini.py      # frameless on-top countdown, notepad, finish view
+│   ├── mini.py      # on-top timer: RUN (countdown / focus count-up) → FINISH → UNDO
 │   └── style.py     # all colours + QSS in one place
 └── assets/          # icon.svg, chime.wav
 tests/test_core.py   # core tests (plain asserts; pytest-compatible)
@@ -100,15 +101,23 @@ beyond what's passed in. Styling only in `ui/style.py`.
   ignores always-on-top for native Wayland clients. `TWOMIN_NATIVE_WAYLAND=1` disables this.
 - Data: `~/.local/share/twomin/twomin.db`. Config: `~/.config/twomin/config.toml` (`seconds = 120`).
 - Session outcomes: `task_done`, `stopped`, `stopped_early`. All count as starts.
+  `sessions.extensions` is now 1 if the person kept going into focus mode (it used to count +2 rounds).
+- **Picker list is short by design:** `open_tasks()` shows at most 5 tasks touched in the last 14
+  days. Older ones fade without any flag; `search_open()` (used as soon as you type) covers all open
+  tasks. `let_go` hides a task for good without calling it done.
+- **Schema changes:** append to `MIGRATIONS` in `store.py` (never edit a shipped entry). `_migrate()`
+  runs them under `BEGIN IMMEDIATE`, because the hotkey process and the instance can open the DB at once.
 
 ## Keys
 
 | Screen | Keys |
 |---|---|
-| Picker | type + Enter (new or exact match) · ↓ into list · Ctrl+R random · Esc close |
+| Picker | type + Enter (new or exact match) · ↓ into list · Del let it go · Ctrl+R random · Esc close |
 | Shrink | Enter start · Tab next field · ↑/↓ cycle earlier steps for this task (draft kept) · Esc back |
 | Timer | N note · D whole task done (any time) · Esc stop (still counts) · drag to move |
-| Finish | Enter keep going · S stop · D task done |
+| Finish | Enter keep going (focus mode) · S stop · D task done |
+| Focus mode | N note · S or Esc stop · D done |
+| After D | U undo (5 s) · Enter close now |
 
 Single-letter keys are handled in `MiniTimer.keyPressEvent`, **not** with `QShortcut`.
 Otherwise typing in the notepad would trigger them.
@@ -139,22 +148,12 @@ Run `twomin --quit` first to restart the tray instance.
 
 Work in this order. Each item should be usable before starting the next.
 
-- **v1 (built):** pick → shrink → timer → finish, SQLite log, notepad, single instance,
-  tray with "starts this week", autostart, GNOME hotkey, installer.
-- **v1.1: verify on real hardware (next).** Work through *Known gaps* below on a real GNOME
-  Wayland session and fix what fails. The core promise is "hotkey → typing → timer" with no
-  mouse; if focus or always-on-top doesn't work, nothing else matters.
-- **v2: keep going + stay small**
-  1. Schema versioning (`PRAGMA user_version` + migrations in `store.py`) before any new tables.
-  2. **Focus mode.** "Keep going" switches to an open-ended, quiet count-up (elapsed time,
-     no further beeps, notepad still on `N`), stopped with Esc/S/D as now. Currently it
-     re-arms another 2 minutes and beeps again, which interrupts flow.
-  3. **Bigger celebration of the start.** Finish view and notification lead with the start
-     (and the running "starts this week" count), whichever outcome was chosen.
-  4. **Keep the picker short.** Tasks not started for ~2 weeks drop out of the list quietly
-     (still searchable by typing); simple edit/archive. No "overdue" anything.
-  5. **Gentle "cut it in half?"** When the popup is closed from the Shrink screen without
-     starting, offer once, as an option on the next open, not a blocking dialog.
+- **v1 (done, verified on Fedora GNOME Wayland):** pick → shrink → timer → finish, SQLite log,
+  notepad, single instance, tray, autostart, Super+T, installer. IBus crash fixed.
+- **v2 (done):** ↑/↓ step history, D any time + undo, schema migrations, focus mode (silent
+  count-up), start celebrated immediately + weekly count, short picker list, let it go.
+- **Next (v2.1):** gentle "cut it in half?" when the popup is closed from the Shrink screen
+  without starting: offer once, on the next open, never a blocking dialog.
 - **v3: cues.** If-then plans in the user's own words ("If I sit down after lunch → start
   [task]"), triggered by events the computer can see (login, unlock, first wake of the day)
   rather than clock times; a timed `QTimer`/systemd-timer cue is the fallback. One prompt per
@@ -162,9 +161,10 @@ Work in this order. Each item should be usable before starting the next.
 - **v4: optional heavy/boring tag + counts-up stats.** Starts per week, per task. If most
   starts are tagged heavy, show one quiet line suggesting that dread needs its own approach
   (and a clinician if it's nearly every task), not a score.
+- **Maybe:** "reopen" a finished task when its title is typed again (keeps notes + step history).
 
-## Known gaps / check on real hardware
+## Known gaps
 
-- Not yet verified on a real GNOME session: popup focus from the hotkey, always-on-top
-  under XWayland, tray icon (needs the AppIndicator extension, plus a logout after first install).
-- No migrations yet. If you change the schema, add a `user_version` check in `store.py`.
+- Tray icon needs the AppIndicator extension (installer adds it; log out once after first install).
+- Headless tests (`QT_QPA_PLATFORM=offscreen`) can't reproduce IBus/focus/stacking behaviour.
+  Check UI changes on the real desktop, and `coredumpctl list --since today | grep python` for crashes.

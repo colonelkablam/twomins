@@ -12,10 +12,11 @@ Tray icon needs the AppIndicator extension, which the installer adds. Log out an
 ## Keys
 | Where | Keys |
 |---|---|
-| Picker | type a task + Enter · ↓ into list · Ctrl+R pick for me · Esc close |
+| Picker | type a task + Enter · ↓ into list · Del let it go · Ctrl+R pick for me · Esc close |
 | Shrink | Enter start · Tab next step · ↑/↓ earlier steps · Esc back |
 | Timer | N note · D whole task done (any time) · Esc stop (still counts) · drag to move |
-| Finish | Enter keep going · S stop here · D whole task done |
+| Finish | Enter keep going (silent count-up) · S stop here · D whole task done |
+| After D | U undo (5 s) · Enter close now |
 
 ## Config
 `~/.config/twomin/config.toml`:

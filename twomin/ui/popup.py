@@ -41,27 +41,35 @@ class PickPage(QWidget):
         lay = QVBoxLayout(self)
         lay.addWidget(_label("What are you avoiding?", "title"))
         lay.addWidget(self.edit)
-        lay.addWidget(_label("Or carry on with one you've started:", "muted"))
+        self.list_lab = _label("", "muted")
+        lay.addWidget(self.list_lab)
         lay.addWidget(self.list, 1)
-        lay.addWidget(_label("Enter choose  ·  ↓ list  ·  Ctrl+R pick for me  ·  Esc close", "hint"))
+        self.status = _label("", "hint")
+        lay.addWidget(self.status)
+        lay.addWidget(_label("Enter choose  ·  ↓ list  ·  Del let it go  ·  Ctrl+R pick for me  ·  Esc close",
+                             "hint"))
 
         self.edit.textChanged.connect(self._filter)
         self.edit.returnPressed.connect(self._enter_from_edit)
         self.list.itemActivated.connect(lambda it: self._choose(it.data(Qt.UserRole)))
         QShortcut(QKeySequence("Ctrl+R"), self, activated=self._random)
         self.edit.installEventFilter(self)
+        self.list.installEventFilter(self)
         self.reload()
 
     def reload(self) -> None:
+        # Short on purpose: only recently touched tasks show. Older ones fade quietly and
+        # are still found by typing (search covers every open task).
         self.tasks = self.store.open_tasks()
+        hidden = self.store.count_open() - len(self.tasks)
+        self.list_lab.setText("Or carry on with one you've started"
+                              + (" (type to find older ones):" if hidden > 0 else ":"))
         self._filter(self.edit.text())
 
     def _filter(self, text: str) -> None:
         self.list.clear()
-        needle = text.strip().lower()
-        for t in self.tasks:
-            if needle and needle not in t.title.lower():
-                continue
+        needle = text.strip()
+        for t in (self.store.search_open(needle) if needle else self.tasks):
             sub = f"last: {t.last_step}  ·  {t.starts} start{'s' * (t.starts != 1)}" if t.starts else "not started yet"
             it = QListWidgetItem(f"{t.title}\n    {sub}")
             it.setData(Qt.UserRole, t)
@@ -69,12 +77,23 @@ class PickPage(QWidget):
         if self.list.count():
             self.list.setCurrentRow(0)
 
-    def eventFilter(self, obj, ev):  # ↓ from the text box jumps into the list
-        if obj is self.edit and ev.type() == ev.Type.KeyPress and ev.key() == Qt.Key_Down:
-            if self.list.count():
-                self.list.setFocus()
-                return True
+    def eventFilter(self, obj, ev):
+        if ev.type() != ev.Type.KeyPress:
+            return super().eventFilter(obj, ev)
+        if obj is self.edit and ev.key() == Qt.Key_Down and self.list.count():
+            self.list.setFocus()                 # ↓ from the text box jumps into the list
+            return True
+        if obj is self.list and ev.key() == Qt.Key_Delete and self.list.currentItem():
+            task = self.list.currentItem().data(Qt.UserRole)
+            QTimer.singleShot(0, lambda: self._let_go(task))   # not mid key-event
+            return True
         return super().eventFilter(obj, ev)
+
+    def _let_go(self, task: Task) -> None:
+        self.store.let_go(task.id)
+        self.status.setText(f"Let go: {task.title}. That's allowed too.")
+        self.reload()
+        (self.list if self.list.count() else self.edit).setFocus()
 
     def _enter_from_edit(self) -> None:
         text = self.edit.text().strip()
@@ -83,7 +102,7 @@ class PickPage(QWidget):
             if it:
                 self._choose(it.data(Qt.UserRole))
             return
-        for t in self.tasks:  # exact match → reuse, don't duplicate
+        for t in self.store.search_open(text):  # exact match → reuse, don't duplicate
             if t.title.lower() == text.lower():
                 return self._choose(t)
         self._choose(self.store.add_task(text))

@@ -1,5 +1,7 @@
 from twomin.core.timer import Countdown
-from twomin.core.store import Store
+import sqlite3
+
+from twomin.core.store import MIGRATIONS, Store
 from twomin.core.models import DONE, STOPPED
 
 
@@ -49,5 +51,32 @@ def test_close_orphans():
     assert s.starts_since() == 2                      # still counts as a start
 
 
+def test_migrates_old_db():
+    import os, tempfile
+    path = os.path.join(tempfile.mkdtemp(), "old.db")
+    old = sqlite3.connect(path)               # a v1 database: no let_go column, user_version 0
+    old.executescript("""CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL,
+        created TEXT NOT NULL DEFAULT (datetime('now','localtime')), done INTEGER NOT NULL DEFAULT 0);
+        INSERT INTO tasks(title) VALUES ('Old task');""")
+    old.commit(); old.close()
+    s = Store(path)
+    assert s.db.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
+    assert [t.title for t in s.open_tasks()] == ["Old task"]
+    Store(path)                                # reopening is a no-op, not a duplicate ALTER
+
+
+def test_short_list_search_and_let_go():
+    s = Store(":memory:")
+    ids = [s.add_task(f"Task {i}").id for i in range(7)]
+    s.db.execute("UPDATE tasks SET created='2020-01-01 00:00:00' WHERE id=?", (ids[0],))  # stale
+    shown = s.open_tasks()
+    assert len(shown) == 5 and ids[0] not in [t.id for t in shown]       # capped, stale faded
+    assert [t.id for t in s.search_open("task 0")] == [ids[0]]           # but findable by typing
+    assert s.search_open("50%") == [] and s.count_open() == 7
+    s.let_go(ids[1])
+    assert ids[1] not in [t.id for t in s.search_open("Task")] and s.count_open() == 6
+
+
 if __name__ == "__main__":
-    test_countdown(); test_store(); test_recent_steps(); test_close_orphans(); print("ok")
+    test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
+    test_migrates_old_db(); test_short_list_search_and_let_go(); print("ok")

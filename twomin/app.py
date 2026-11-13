@@ -6,7 +6,7 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from . import notify
-from .core.models import DONE, EARLY
+from .core.models import DONE, EARLY, STOPPED
 from .core.store import Store
 from .ui.mini import MiniTimer
 from .ui.popup import Popup
@@ -24,6 +24,7 @@ class Controller(QObject):
         self.popup: Popup | None = None
         self.session_id: int | None = None
         self.tray = self._make_tray() if tray else None
+        self._refresh_stats()
 
     # ---- state the IPC layer asks about
     @property
@@ -53,7 +54,9 @@ class Controller(QObject):
         if self.busy:
             return self.mini.bring_forward()
         self.session_id = self.store.start_session(task_id, steps).id
-        self.mini = MiniTimer(title, steps, self.seconds)
+        week = self.store.starts_since(7)            # includes the start just saved
+        self.mini = MiniTimer(title, steps, self.seconds, starts_week=week)
+        self._refresh_stats()
         self.mini.note.connect(lambda text: self.store.add_note(task_id, self.session_id, text))
         self.mini.beeped.connect(self._beep)
         self.mini.finished.connect(self._finished)
@@ -63,14 +66,21 @@ class Controller(QObject):
         notify.chime()
         notify.desktop("Two minutes — you started ✓", "Stop here, or keep going if you want to.")
 
-    def _finished(self, outcome: str, seconds: float, extensions: int) -> None:
-        self.store.end_session(self.session_id, seconds, extensions, outcome)
+    def _finished(self, outcome: str, seconds: float, kept_going: int) -> None:
+        self.store.end_session(self.session_id, seconds, kept_going, outcome)
         self.mini = None
         self.session_id = None
+        n = self.store.starts_since(7)
+        week = f"{n} start{'s' * (n != 1)} this week."
+        # Every ending leads with the start. The beep already told you on a plain stop.
         if outcome == DONE:
-            notify.desktop("Task done ✓", "Nice.")
+            notify.desktop("Started and finished ✓", week)
         elif outcome == EARLY:
-            notify.desktop("Started ✓", "Starting is the win. It's saved for next time.")
+            notify.desktop("Started ✓ That's the win.", f"Saved for next time. {week}")
+        elif outcome == STOPPED and kept_going:
+            mins = int(seconds // 60)
+            notify.desktop("Started ✓", f"You kept going for {mins} min. {week}")
+        self._refresh_stats()
         if not self.keep_alive():
             self.app.quit()
 
@@ -98,5 +108,10 @@ class Controller(QObject):
         return tray
 
     def _refresh_stats(self) -> None:
+        if self.tray is None and not hasattr(self, "_stats"):
+            return
         n = self.store.starts_since(7)
-        self._stats.setText(f"{n} start{'s' * (n != 1)} this week")
+        text = f"{n} start{'s' * (n != 1)} this week"
+        self._stats.setText(text)
+        if self.tray is not None:
+            self.tray.setToolTip(f"Two-Minute Start · {text}")
