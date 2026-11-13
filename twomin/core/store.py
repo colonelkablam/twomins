@@ -126,22 +126,32 @@ class Store:
         self.db.commit()
         return Session(cur.lastrowid, task_id, steps)
 
-    def recent_steps(self, task_id: int, limit: int = 10) -> list[tuple[str, list[str]]]:
-        """Step sets from earlier starts of a task, newest first, repeats removed.
+    def recent_steps(self, task_id: int, limit: int = 10) -> list[tuple[str, list[str], int, int]]:
+        """Past actions for a task: each distinct step set, newest first.
 
-        Returns (started, steps) pairs; `started` is 'YYYY-MM-DD HH:MM:SS'.
+        Returns (last_started, steps, total_seconds, times) per distinct step set. Nothing is
+        ever dismissed: a stopped action is still here to pick up again.
         """
-        out: list[tuple[str, list[str]]] = []
-        seen: set[str] = set()
-        for started, steps in self.db.execute(
-            "SELECT started, steps FROM sessions WHERE task_id=? ORDER BY id DESC", (task_id,)
+        out: dict[str, list] = {}
+        for started, steps, secs in self.db.execute(
+            "SELECT started, steps, COALESCE(seconds, 0) FROM sessions WHERE task_id=? "
+            "ORDER BY id DESC", (task_id,)
         ):
-            if steps and steps not in seen:
-                seen.add(steps)
-                out.append((started, steps.split("\n")))
-                if len(out) == limit:
-                    break
-        return out
+            if not steps:
+                continue
+            if steps in out:
+                out[steps][2] += secs
+                out[steps][3] += 1
+            elif len(out) < limit:
+                out[steps] = [started, steps.split("\n"), secs, 1]
+        return [tuple(v) for v in out.values()]
+
+    def task_totals(self, task_id: int) -> tuple[int, int]:
+        """(starts, total seconds) for a task. Only ever goes up."""
+        n, secs = self.db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(seconds), 0) FROM sessions WHERE task_id=?",
+            (task_id,)).fetchone()
+        return n, secs
 
     def end_session(self, session_id: int, seconds: float, extensions: int, outcome: str) -> None:
         self.db.execute(

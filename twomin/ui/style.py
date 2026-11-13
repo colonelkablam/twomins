@@ -28,6 +28,9 @@ QListWidget {{
 }}
 QListWidget::item {{ padding: 6px 8px; border-radius: 6px; }}
 QListWidget::item:selected {{ background: {ACCENT}; color: #000; }}
+QListWidget#past {{ font-size: 9pt; color: {MUTED}; background: transparent; border: none; padding: 0; }}
+QListWidget#past::item {{ padding: 2px 6px; border-radius: 4px; }}
+QListWidget#past::item:selected {{ background: {PANEL}; color: {FG}; }}
 QPushButton {{
     background: {PANEL}; border: 1px solid #3a3b45; border-radius: 8px; padding: 7px 12px;
 }}

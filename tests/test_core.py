@@ -36,9 +36,14 @@ def test_recent_steps():
     a = s.add_task("Book car service")
     for steps in (["Search garages"], ["Open Smith's page", "Find Thu slot"], ["Search garages"]):
         s.start_session(a.id, steps)
-    hist = [steps for _, steps in s.recent_steps(a.id)]
-    assert hist == [["Search garages"], ["Open Smith's page", "Find Thu slot"]]  # newest first, deduped
+    sess = [r[0] for r in s.db.execute("SELECT id FROM sessions ORDER BY id")]
+    for sid, secs in zip(sess, (120, 300, 60)):
+        s.end_session(sid, secs, 0, STOPPED)
+    hist = s.recent_steps(a.id)
+    assert [h[1] for h in hist] == [["Search garages"], ["Open Smith's page", "Find Thu slot"]]
+    assert (hist[0][2], hist[0][3]) == (180, 2)          # repeats merged: time summed, count 2
     assert s.recent_steps(a.id, limit=1)[0][1] == ["Search garages"]
+    assert s.task_totals(a.id) == (3, 480)
 
 
 def test_close_orphans():
