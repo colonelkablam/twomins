@@ -11,9 +11,10 @@ into another window must never end a session by accident.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtGui import QFontMetrics, QGuiApplication
 from PySide6.QtWidgets import (
+    QGraphicsOpacityEffect,
     QFrame, QLabel, QLineEdit, QProgressBar, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -73,9 +74,15 @@ class MiniTimer(QWidget):
         run = QWidget()
         rl = QVBoxLayout(run)
         rl.setContentsMargins(4, 2, 4, 2)
-        self.flash = _lab("Started ✓", "win")      # the win is pressing Enter: say so at once
-        rl.addWidget(self.flash)
-        rl.addWidget(_lab(title, "task"))
+        # Header slot: "Started ✓" (the win is pressing Enter), then the task name fades into the
+        # same fixed-height line, so the window never changes size. Names only, no labels.
+        self.title = title
+        self.head = _lab("Started ✓", "win", wrap=False)
+        self.head.setToolTip(title)
+        self.head.setFixedHeight(self.head.sizeHint().height())
+        self._fade = QGraphicsOpacityEffect(self.head, opacity=1.0)
+        self.head.setGraphicsEffect(self._fade)
+        rl.addWidget(self.head)
         rl.addWidget(_lab(steps[0], "step"))
         if len(steps) > 1:
             rl.addWidget(_lab("then: " + "  →  ".join(steps[1:]), "muted"))
@@ -136,7 +143,7 @@ class MiniTimer(QWidget):
         self.clock.start()
         self.ticker.start()
         self._tick()
-        QTimer.singleShot(FLASH_MS, self, self._hide_flash)   # context: safe if closed first
+        QTimer.singleShot(FLASH_MS, self, self._swap_head)    # context: safe if closed first
         self._resize()
         geo = QGuiApplication.primaryScreen().availableGeometry()
         self.move(geo.right() - self.width() - 24, geo.bottom() - self.height() - 24)
@@ -155,9 +162,23 @@ class MiniTimer(QWidget):
         if bottom is not None:
             self.move(self.x(), bottom - self.height() + 1)
 
-    def _hide_flash(self) -> None:
-        self.flash.hide()
-        self._resize()
+    def _swap_head(self) -> None:
+        """Fade "Started ✓" out and the task name in, in the same slot (no resize)."""
+        out = QPropertyAnimation(self._fade, b"opacity", self, duration=220,
+                                 startValue=1.0, endValue=0.0, easingCurve=QEasingCurve.InQuad)
+
+        def show_name() -> None:
+            self.head.setObjectName("task")
+            self.head.style().unpolish(self.head)
+            self.head.style().polish(self.head)
+            width = (self.head.width() or 300) - 12        # breathing room before the edge
+            self.head.setText(QFontMetrics(self.head.font()).elidedText(
+                self.title, Qt.ElideRight, width))
+            QPropertyAnimation(self._fade, b"opacity", self, duration=320, startValue=0.0,
+                               endValue=1.0, easingCurve=QEasingCurve.OutQuad).start(
+                QPropertyAnimation.DeleteWhenStopped)
+        out.finished.connect(show_name)
+        out.start(QPropertyAnimation.DeleteWhenStopped)
 
     def _tick(self) -> None:
         view = self.stack.currentIndex()

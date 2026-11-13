@@ -239,18 +239,12 @@ class ShrinkPage(QWidget):
         lay.addSpacing(10)
         lay.addWidget(_label("What's the smallest next physical action?", "prompt"))
         lay.addWidget(_label("If it feels too small to count, you got it right.", "meta"))
-        # ✂ smaller: when *you* feel the step is too big, halve it (transcript ch.7)
+        # ✂ Alt+H: when *you* feel the step is too big, halve it (transcript ch.7). Shortcut only:
+        # the question above already asks for the smallest action; a button just repeated it.
         self.cut_lab = _label("", "nudge")
         self.cut_lab.hide()
         lay.addWidget(self.cut_lab)
-        row1 = QHBoxLayout()
-        row1.addWidget(self.step1, 1)
-        smaller = QPushButton("✂ smaller", objectName="round")
-        smaller.setFocusPolicy(Qt.NoFocus)
-        smaller.setToolTip("Feels too big? Cut it in half (Alt+H)")
-        smaller.clicked.connect(self._smaller)
-        row1.addWidget(smaller)
-        lay.addLayout(row1)
+        lay.addWidget(self.step1)
         # Quiet live hints while typing: "make it physical" / "that's two actions"
         self.step_hint = _label("", "nudge")
         self.step_hint.setTextFormat(Qt.RichText)
@@ -285,7 +279,6 @@ class ShrinkPage(QWidget):
         for e in (self.step1, self.step2, self.step3):
             e.returnPressed.connect(lambda: QTimer.singleShot(0, self._go))
             e.installEventFilter(self)
-        smaller.setMinimumHeight(self.step1.sizeHint().height())
         start.clicked.connect(lambda: QTimer.singleShot(0, self._go))
         back.clicked.connect(self.back)
         QWidget.setTabOrder(self.title_edit, self.step1)   # ⇧Tab from step 1 → rename

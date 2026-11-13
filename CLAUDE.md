@@ -30,7 +30,7 @@ Key ideas the app must keep:
 | Once started, keeping going is easier than quitting | Flow: "Keep going" turns the timer purple and counts up silently; flow time is recorded and celebrated |
 | Relief comes from starting, not avoiding | "Started ✓" the moment you press Enter; weekly start count on the timer, finish screen, tray |
 | If-then cues (implementation intentions) | **v3**: "If I [cue] → start [task]" |
-| Didn't start? Step wasn't small enough | "✂ smaller" button / Alt+H on the actions screen: you choose when to halve a step |
+| Didn't start? Step wasn't small enough | Alt+H on the actions screen ("too big: … what's half of that?"); shortcut only, no button |
 | "Specific and concrete, not 'work on it'" | Quiet live hint for vague verbs: "Make it physical" (`core/steps.py`) |
 | "Line up one or two more" | Live hint when a step is two actions ("X and Y"): Alt+S splits it into "then…" |
 | Heavy (dread) vs boring | **v4**: optional tag; the app points elsewhere, it doesn't try to fix it |
@@ -172,7 +172,7 @@ Work in this order. Each item should be usable before starting the next.
   notepad, single instance, tray, autostart, Super+T, installer. IBus crash fixed.
 - **v2 (done):** ↑/↓ step history, D any time + undo, schema migrations, focus mode (silent
   count-up), start celebrated immediately + weekly count, short picker list, let it go.
-- **v2.1 (done):** reframing a step, person-pulled. "✂ smaller" (Alt+H) keeps the too-big step in
+- **v2.1 (done):** reframing a step, person-pulled. Alt+H ("✂ smaller", shortcut only) keeps the too-big step in
   view and asks for half; live hints for vague steps and two-actions-in-one (Alt+S split). A
   close-based "you didn't start" offer was tried and removed: closing the popup is ambiguous
   (interrupted, wrong task, just looking), and acting on it felt railroady. Migration 3's
