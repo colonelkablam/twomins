@@ -413,7 +413,7 @@ class Popup(QWidget):
 
     def __init__(self, store: Store, seconds: int = 120):
         super().__init__(None, Qt.Window | Qt.WindowStaysOnTopHint)
-        self.setWindowTitle("Two-Minute Start")
+        self.setWindowTitle("twomins")
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.resize(560, 600)
         self.task: Task | None = None

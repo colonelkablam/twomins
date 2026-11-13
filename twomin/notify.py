@@ -25,4 +25,4 @@ def chime() -> None:
 
 def desktop(title: str, body: str = "") -> None:
     if shutil.which("notify-send"):
-        _spawn(["notify-send", "--app-name=Two-Minute Start", "-i", str(ICON), title, body])
+        _spawn(["notify-send", "--app-name=twomins", "-i", str(ICON), title, body])

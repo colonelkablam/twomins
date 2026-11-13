@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Two-Minute Start installer for Fedora + GNOME (Wayland or X11).
+# twomins installer for Fedora + GNOME (Wayland or X11).
 # Re-run any time; it's idempotent. Override the hotkey with: TWOMIN_KEY='<Super><Shift>t' ./install.sh
 set -euo pipefail
 
@@ -38,7 +38,7 @@ cp "$DIR/twomin/assets/icon.svg" "$ICONS/twomin.svg"
 cat > "$APPS/twomin.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Two-Minute Start
+Name=twomins
 Comment=Start the task you're avoiding — just two minutes
 Exec=$BIN
 Icon=twomin
@@ -68,7 +68,7 @@ print(str(paths))
 PY
 )"
 gsettings set "$KB_SCHEMA" custom-keybindings "$updated"
-gsettings set "$KB_SCHEMA.custom-keybinding:$KB_PATH" name "Two-Minute Start"
+gsettings set "$KB_SCHEMA.custom-keybinding:$KB_PATH" name "twomins"
 gsettings set "$KB_SCHEMA.custom-keybinding:$KB_PATH" command "$BIN"
 gsettings set "$KB_SCHEMA.custom-keybinding:$KB_PATH" binding "$KEY"
 

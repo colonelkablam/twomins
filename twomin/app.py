@@ -90,9 +90,9 @@ class Controller(QObject):
         if not QSystemTrayIcon.isSystemTrayAvailable():
             return None
         tray = QSystemTrayIcon(QIcon(str(notify.ICON)), self)
-        tray.setToolTip("Two-Minute Start")
+        tray.setToolTip("twomins")
         menu = QMenu()
-        go = QAction("Start two minutes…", menu, triggered=lambda: self.show_popup())
+        go = QAction("Start twomins", menu, triggered=lambda: self.show_popup())
         self._stats = QAction("", menu, enabled=False)
         quit_ = QAction("Quit", menu, triggered=self.app.quit)
         menu.addAction(go)
@@ -114,7 +114,7 @@ class Controller(QObject):
         text = week_text(self.store)
         self._stats.setText(text)
         if self.tray is not None:
-            self.tray.setToolTip(f"Two-Minute Start · {text}")
+            self.tray.setToolTip(f"twomins · {text}")
 
 
 def week_text(store: Store) -> str:

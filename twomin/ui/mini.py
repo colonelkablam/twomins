@@ -51,7 +51,7 @@ class MiniTimer(QWidget):
     def __init__(self, title: str, steps: list[str], seconds: int = 120,
                  week: str = "1 start this week"):
         super().__init__(None, Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setWindowTitle("Two-Minute Start — timer")
+        self.setWindowTitle("twomins timer")
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setFixedWidth(340)
         self.clock = Countdown(seconds)

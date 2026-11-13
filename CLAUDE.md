@@ -164,6 +164,33 @@ QT_QPA_PLATFORM=offscreen .venv/bin/twomin     # headless smoke run
 The install is editable (`pip install -e`), so code changes apply the next time it launches.
 Run `twomin --quit` first to restart the tray instance.
 
+## How we work
+
+Two users on one machine. Claude develops as `claudedev` in `~/ClaudeProjects/twomins` (no
+access to Nick's desktop session). Nick runs the app as `nickh` from `~/Projects/twomins`, a
+clone of the same GitHub repo.
+
+1. **Talk it through first** for anything that changes UX: check it against the transcript and
+   the Principles above, give a recommendation, then build.
+2. **Build and check here, headless:**
+   - core tests: `.venv/bin/python tests/test_core.py` (add a test for new store/core logic);
+   - scripted UI runs with `QT_QPA_PLATFORM=offscreen` and `PySide6.QtTest` (`QTest.keyClick`,
+     `QTest.qWait`), driving `Controller` / `Popup` against `Store(":memory:")`;
+   - screenshots for anything visual: `widget.grab().save(path)` into the scratchpad, then look
+     at them and fix what's off before reporting. Call `load_fonts()` and set `QSS` first.
+   Headless runs can't show IBus, focus or window stacking; say so rather than claim it works.
+3. **Report** what changed and how it was checked, then wait. **Commit and push only when Nick
+   says "commit and push".** One commit per round, a descriptive message, then `git push`.
+4. **Nick updates and tries it** on the real desktop:
+   ```bash
+   cd ~/Projects/twomins && git pull
+   .venv/bin/twomin --quit; setsid -f .venv/bin/twomin --tray >/dev/null 2>&1
+   ```
+   `./install.sh` again only when the installer changed (menu name, hotkey, packages).
+5. **Debugging his desktop:** ask for command output rather than guessing:
+   `pgrep -af twomin`, `coredumpctl list --since today | grep python`, `coredumpctl info <PID>`,
+   and session rows via `python3 -c "import sqlite3,os; …"` on `~/.local/share/twomin/twomin.db`.
+
 ## Status / roadmap
 
 Work in this order. Each item should be usable before starting the next.
