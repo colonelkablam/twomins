@@ -103,18 +103,15 @@ def test_week_totals():
     assert s.open_tasks()[0].title == "Renamed"
 
 
-def test_nudge_once():
-    s = Store(":memory:")
-    a = s.add_task("Book car"); b = s.add_task("Newer task")
-    s.set_nudge(a.id, "  Search garages ")
-    first = s.open_tasks()[0]
-    assert first.id == a.id and first.nudge == "Search garages"      # offered task listed first
-    s.clear_nudges({a.id})
-    assert s.open_tasks()[0].nudge is None
-    s.set_nudge(b.id, ""); s.start_session(b.id, ["tiny"])           # starting clears it
-    assert all(t.nudge is None for t in s.open_tasks())
+def test_step_checks():
+    from twomin.core.steps import is_vague, split_step
+    assert is_vague("work on the report") and is_vague("Sort out laundry")
+    assert not is_vague("get my tablet") and not is_vague("open laptop")
+    assert split_step("search garages and book one") == ("search garages", "book one")
+    assert split_step("open laptop, then search garages") == ("open laptop", "search garages")
+    assert split_step("pick up 5 socks") is None and split_step("A and B") is None
 
 
 if __name__ == "__main__":
     test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
-    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_nudge_once(); print("ok")
+    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_step_checks(); print("ok")

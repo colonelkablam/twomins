@@ -30,7 +30,9 @@ Key ideas the app must keep:
 | Once started, keeping going is easier than quitting | Flow: "Keep going" turns the timer purple and counts up silently; flow time is recorded and celebrated |
 | Relief comes from starting, not avoiding | "Started ✓" the moment you press Enter; weekly start count on the timer, finish screen, tray |
 | If-then cues (implementation intentions) | **v3**: "If I [cue] → start [task]" |
-| Didn't start? Step wasn't small enough | "✂ Make it smaller": offered once, next open, after backing out of the actions screen |
+| Didn't start? Step wasn't small enough | "✂ smaller" button / Alt+H on the actions screen: you choose when to halve a step |
+| "Specific and concrete, not 'work on it'" | Quiet live hint for vague verbs: "Make it physical" (`core/steps.py`) |
+| "Line up one or two more" | Live hint when a step is two actions ("X and Y"): Alt+S splits it into "then…" |
 | Heavy (dread) vs boring | **v4**: optional tag; the app points elsewhere, it doesn't try to fix it |
 
 ## Principles (read before adding any feature)
@@ -76,11 +78,12 @@ twomin/
 ├── core/            # NO Qt imports — keep it testable
 │   ├── timer.py     # Countdown (monotonic clock, injectable for tests)
 │   ├── models.py    # Task, Session, outcome constants
+│   ├── steps.py     # is_vague() / split_step(): hints on a step as it's typed
 │   └── store.py     # SQLite + MIGRATIONS (PRAGMA user_version); short list, search, let_go
 ├── ui/
 │   ├── popup.py     # PickPage → ShrinkPage; emits start(task_id, title, steps)
 │   ├── mini.py      # on-top timer: RUN (countdown / focus count-up) → FINISH → UNDO
-│   └── style.py     # all colours + QSS in one place
+│   └── style.py     # tokens, type scale, font loading, QSS (the one place for the look)
 └── assets/          # icon.svg, chime.wav
 tests/test_core.py   # core tests (plain asserts; pytest-compatible)
 install.sh / uninstall.sh
@@ -102,6 +105,10 @@ beyond what's passed in. Styling only in `ui/style.py`.
 - Data: `~/.local/share/twomin/twomin.db`. Config: `~/.config/twomin/config.toml` (`seconds = 120`).
 - Session outcomes: `task_done`, `stopped`, `stopped_early`. All count as starts.
   `sessions.extensions` is now 1 if the person kept going into focus mode (it used to count +2 rounds).
+- **Look** (`ui/style.py`): one hero per screen (picker question, task name on the actions
+  screen, the timer clock); type scale `KEYS/META/BODY/PROMPT/HERO/CLOCK`; bundled font
+  Atkinson Hyperlegible Next (`assets/`, OFL, loaded by `load_fonts()`); key hints are a quiet
+  footer built with `keys()`; dashed boxes = optional; a yellow left bar = selected row.
 - **Colours mean states** (all in `ui/style.py`): yellow = starting (countdown, +2 round),
   calm blue = stop (never red: stopping isn't failing), green = whole task done, purple = flow.
   Entering flow sets `FLOW_QSS` on the timer window so the whole window turns purple.
@@ -124,7 +131,7 @@ beyond what's passed in. Styling only in `ui/style.py`.
 | Screen | Keys |
 |---|---|
 | Picker | type + Enter (new or exact match) · ↓ into list · Del let it go · Ctrl+R random · Esc close |
-| Shrink | Enter start · Tab next field · ↓ older / ↑ newer past action, or click one (your typing is kept) · Esc back |
+| Shrink | Enter start · Tab next field · ↓ older / ↑ newer past action, or click one (your typing is kept) · Alt+H ✂ smaller · Alt+S split two actions · Esc back |
 | Timer | N note · ⇧S or Esc stop (still counts) · ⇧D whole task done (any time) · drag to move |
 | Finish (clock keeps counting) | Enter keep going (focus mode) · 2 another round with a beep · ⇧S stop · ⇧D done |
 | Focus mode | N note · ⇧S or Esc stop · ⇧D done |
@@ -165,11 +172,11 @@ Work in this order. Each item should be usable before starting the next.
   notepad, single instance, tray, autostart, Super+T, installer. IBus crash fixed.
 - **v2 (done):** ↑/↓ step history, D any time + undo, schema migrations, focus mode (silent
   count-up), start celebrated immediately + weekly count, short picker list, let it go.
-- **v2.1 (done):** "cut it in half?". Closing the popup after reaching the actions screen
-  without starting stores `tasks.nudge` (migration 3, the step typed). Next open: that task is
-  listed first in yellow, and its actions screen asks "What's half of that?". Once only: shown
-  offers are cleared on close (`Popup.closeEvent`), a start clears it, and backing out of an
-  offer doesn't create a new one.
+- **v2.1 (done):** reframing a step, person-pulled. "✂ smaller" (Alt+H) keeps the too-big step in
+  view and asks for half; live hints for vague steps and two-actions-in-one (Alt+S split). A
+  close-based "you didn't start" offer was tried and removed: closing the popup is ambiguous
+  (interrupted, wrong task, just looking), and acting on it felt railroady. Migration 3's
+  `tasks.nudge` column is left unused (shipped migrations are never edited).
 - **Next:** v3 cues.
 - **v3: cues.** If-then plans in the user's own words ("If I sit down after lunch → start
   [task]"), triggered by events the computer can see (login, unlock, first wake of the day)

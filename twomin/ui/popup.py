@@ -8,15 +8,16 @@ import random
 from datetime import datetime
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QKeySequence, QShortcut
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ..core.models import Task
+from ..core.steps import is_vague, split_step
 from ..core.store import Store
-from .style import ACCENT, FLOW
+from .style import ACCENT, FLOW, keys
 
 
 def _label(text: str, name: str = "", wrap: bool = True) -> QLabel:
@@ -27,6 +28,26 @@ def _label(text: str, name: str = "", wrap: bool = True) -> QLabel:
     return lab
 
 
+def _score() -> QLabel:
+    """Small right-aligned tally in a screen's top corner: counts up, never zeros."""
+    lab = QLabel(objectName="score")
+    lab.setTextFormat(Qt.RichText)
+    lab.setAlignment(Qt.AlignRight | Qt.AlignTop)
+    return lab
+
+
+def _headed(left: QWidget, right: QWidget) -> QHBoxLayout:
+    row = QHBoxLayout()
+    row.setSpacing(12)
+    row.addWidget(left, 1, Qt.AlignBottom)
+    row.addWidget(right, 0, Qt.AlignBottom)
+    return row
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'s' * (n != 1)}"
+
+
 class PickPage(QWidget):
     chosen = Signal(object)  # Task
 
@@ -34,26 +55,28 @@ class PickPage(QWidget):
         super().__init__()
         self.store = store
         self.tasks: list[Task] = []
-        self.offered: set[int] = set()     # tasks shown with a "cut it in half?" offer
 
-        self.edit = QLineEdit(placeholderText="Type it messy — the whole blurry pile is fine")
+        self.edit = QLineEdit(placeholderText="Type it messy. The whole blurry pile is fine.",
+                              objectName="ask")
         self.list = QListWidget()
         self.list.setFocusPolicy(Qt.StrongFocus)
-
-        self.week = _label("", "task")              # 10pt muted: visible, not loud
-        self.week.setTextFormat(Qt.RichText)
+        self.week = _score()
+        self.older = _label("", "meta")
+        self.older.setAlignment(Qt.AlignRight)
+        self.status = _label("", "meta")
+        footer = _label(keys(("⏎", "choose"), ("↓", "list"), ("Del", "let it go"),
+                             ("Ctrl+R", "pick for me"), ("Esc", "close")), "keys")
+        footer.setTextFormat(Qt.RichText)
 
         lay = QVBoxLayout(self)
-        lay.addWidget(self.week)
-        lay.addWidget(_label("What are you avoiding?", "title"))
+        lay.setSpacing(10)
+        lay.addLayout(_headed(_label("What are you avoiding?", "hero"), self.week))
         lay.addWidget(self.edit)
-        self.list_lab = _label("", "muted")
-        lay.addWidget(self.list_lab)
+        lay.addSpacing(8)
+        lay.addLayout(_headed(_label("Carry on", "section"), self.older))
         lay.addWidget(self.list, 1)
-        self.status = _label("", "hint")
         lay.addWidget(self.status)
-        lay.addWidget(_label("Enter choose  ·  ↓ list  ·  Del let it go  ·  Ctrl+R pick for me  ·  Esc close",
-                             "hint"))
+        lay.addWidget(footer)
 
         self.edit.textChanged.connect(self._filter)
         self.edit.returnPressed.connect(self._enter_from_edit)
@@ -69,33 +92,36 @@ class PickPage(QWidget):
         self.tasks = self.store.open_tasks()
         self._show_week()
         hidden = self.store.count_open() - len(self.tasks)
-        self.list_lab.setText("Or carry on with one you've started"
-                              + (" (type to find older ones):" if hidden > 0 else ":"))
+        self.older.setText("type to find older ones" if hidden > 0 else "")
         self._filter(self.edit.text())
 
     def _filter(self, text: str) -> None:
         self.list.clear()
         needle = text.strip()
         for t in (self.store.search_open(needle) if needle else self.tasks):
-            sub = _task_line(t)
-            it = QListWidgetItem(f"{t.title}\n    {sub}")
+            row = QWidget(objectName="row")
+            rl = QVBoxLayout(row)
+            rl.setContentsMargins(12, 8, 12, 8)
+            rl.setSpacing(2)
+            rl.addWidget(_label(t.title, "rowtitle", wrap=False))
+            rl.addWidget(_label(_task_line(t), "rowmeta", wrap=False))
+            it = QListWidgetItem()
             it.setData(Qt.UserRole, t)
-            if t.nudge is not None:
-                it.setForeground(QColor(ACCENT))
-                self.offered.add(t.id)
+            it.setSizeHint(row.sizeHint())
             self.list.addItem(it)
+            self.list.setItemWidget(it, row)
         if self.list.count():
             self.list.setCurrentRow(0)
 
     def _show_week(self) -> None:
         n, secs = self.store.starts_since(7), self.store.time_since(7)
         if not n:                                    # never a row of zeros
-            self.week.setText("Last 7 days  ·  your next start counts")
+            self.week.setText("Your next start counts")
             return
         f, _ = self.store.flows_since(7)
-        flows = f'  ·  <span style="color:{FLOW}">✦ {f} flow{"s" * (f != 1)}</span>' if f else ""
-        self.week.setText(f'Last 7 days  ·  <b style="color:{ACCENT}">{n} start{"s" * (n != 1)}</b>'
-                          f"  ·  {_dur(secs)}{flows}")
+        flows = f'&nbsp;&nbsp;<span style="color:{FLOW}">✦ {_plural(f, "flow")}</span>' if f else ""
+        self.week.setText(f'<b style="color:{ACCENT}">{_plural(n, "start")}</b>{flows}<br>'
+                          f"{_dur(secs)} in the last 7 days")
 
     def eventFilter(self, obj, ev):
         if ev.type() != ev.Type.KeyPress:
@@ -157,15 +183,13 @@ def _when(started: str) -> str:
 
 def _task_line(t: Task) -> str:
     """Per-task totals, counted up. This week if there's anything this week, else all time."""
-    if t.nudge is not None:
-        return "✂ try an even smaller step"
     if not t.starts:
         return "not started yet"
     if t.week_starts:
-        tally = f"this week: {t.week_starts} start{'s' * (t.week_starts != 1)} · {_dur(t.week_seconds)}"
+        tally = f"{_plural(t.week_starts, 'start')} this week, {_dur(t.week_seconds)}"
     else:
-        tally = f"{t.starts} start{'s' * (t.starts != 1)} · {_dur(t.seconds)} so far"
-    return f"{tally}  ·  last: {t.last_step}"
+        tally = f"{_plural(t.starts, 'start')}, {_dur(t.seconds)} so far"
+    return f"{tally}.  Last: {t.last_step}"
 
 
 def _dur(seconds: int | float) -> str:
@@ -185,8 +209,8 @@ class ShrinkPage(QWidget):
     def __init__(self, store: Store, seconds: int = 120):
         super().__init__()
         self.store = store
-        self.context = _label("", "hint")
-        self.step1 = QLineEdit(placeholderText=STEP_HINT)
+        self.context = _label("", "meta")
+        self.step1 = QLineEdit(placeholderText=STEP_HINT, objectName="ask")
         self.step2 = QLineEdit(placeholderText="then… (optional)", objectName="optional")
         self.step3 = QLineEdit(placeholderText="then… (optional)", objectName="optional")
         # The task title is editable in place: click it (or ⇧Tab from the step box).
@@ -196,29 +220,49 @@ class ShrinkPage(QWidget):
         self.title_edit.returnPressed.connect(self.step1.setFocus)   # Enter here never starts
         self.title_edit.editingFinished.connect(self._rename)
         start = QPushButton(f"Start {seconds // 60}:{seconds % 60:02d}  ▶", objectName="primary")
-        back = QPushButton("← Back")
+        back = QPushButton("← Back", objectName="quiet")
+        self.tally = _score()
 
         # Past actions: every earlier start of this task, newest first. Click or ↑/↓ to reuse.
-        self.past_lab = _label("", "hint")
+        self.past_head = QWidget()
+        ph = _headed(_label("Earlier actions", "section"), _label("↓↑ or click to reuse", "meta"))
+        ph.setContentsMargins(0, 0, 0, 0)
+        self.past_head.setLayout(ph)
         self.past = QListWidget(objectName="past")
         self.past.setFocusPolicy(Qt.NoFocus)           # keys stay in the step boxes
         self.past.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.past.itemClicked.connect(lambda it: self._recall_to(self.past.row(it)))
 
         lay = QVBoxLayout(self)
-        lay.addWidget(_label("Task  ·  click to rename", "hint"))
-        lay.addWidget(self.title_edit)
-        lay.addWidget(_label("What's the smallest next physical action?", "title"))
-        lay.addWidget(_label("If it feels too small to count, you got it right.", "muted"))
-        self.nudge_lab = _label("", "nudge")
-        self.nudge_lab.hide()
-        lay.addWidget(self.nudge_lab)
-        lay.addWidget(self.step1)
-        lay.addWidget(_label("Takes less than 2 min? Line up one or two more:", "hint"))
+        lay.setSpacing(8)
+        lay.addLayout(_headed(self.title_edit, self.tally))      # the task is the hero here
+        lay.addSpacing(10)
+        lay.addWidget(_label("What's the smallest next physical action?", "prompt"))
+        lay.addWidget(_label("If it feels too small to count, you got it right.", "meta"))
+        # ✂ smaller: when *you* feel the step is too big, halve it (transcript ch.7)
+        self.cut_lab = _label("", "nudge")
+        self.cut_lab.hide()
+        lay.addWidget(self.cut_lab)
+        row1 = QHBoxLayout()
+        row1.addWidget(self.step1, 1)
+        smaller = QPushButton("✂ smaller", objectName="round")
+        smaller.setFocusPolicy(Qt.NoFocus)
+        smaller.setToolTip("Feels too big? Cut it in half (Alt+H)")
+        smaller.clicked.connect(self._smaller)
+        row1.addWidget(smaller)
+        lay.addLayout(row1)
+        # Quiet live hints while typing: "make it physical" / "that's two actions"
+        self.step_hint = _label("", "nudge")
+        self.step_hint.setTextFormat(Qt.RichText)
+        self.step_hint.linkActivated.connect(lambda _: self._split())
+        self.step_hint.hide()
+        lay.addWidget(self.step_hint)
+        lay.addSpacing(4)
+        lay.addWidget(_label("Under two minutes? Line up one or two more.", "meta"))
         lay.addWidget(self.step2)
         lay.addWidget(self.step3)
-        lay.addSpacing(6)
-        lay.addWidget(self.past_lab)
+        lay.addSpacing(10)
+        lay.addWidget(self.past_head)
         lay.addWidget(self.past)
         lay.addWidget(self.context)
         lay.addStretch(1)
@@ -227,7 +271,10 @@ class ShrinkPage(QWidget):
         row.addStretch(1)
         row.addWidget(start)
         lay.addLayout(row)
-        lay.addWidget(_label("Enter start  ·  Tab next box  ·  ↑↓ past actions  ·  Esc back", "hint"))
+        footer = _label(keys(("⏎", "start"), ("Tab", "next box"), ("↓↑", "earlier"),
+                             ("Alt+H", "smaller"), ("Alt+S", "split"), ("Esc", "back")), "keys")
+        footer.setTextFormat(Qt.RichText)
+        lay.addWidget(footer)
 
         self.history: list[tuple[str, list[str]]] = []
         self.pos = -1                     # -1 = your own typing; 0.. = history entries
@@ -238,11 +285,17 @@ class ShrinkPage(QWidget):
         for e in (self.step1, self.step2, self.step3):
             e.returnPressed.connect(lambda: QTimer.singleShot(0, self._go))
             e.installEventFilter(self)
+        smaller.setMinimumHeight(self.step1.sizeHint().height())
         start.clicked.connect(lambda: QTimer.singleShot(0, self._go))
         back.clicked.connect(self.back)
         QWidget.setTabOrder(self.title_edit, self.step1)   # ⇧Tab from step 1 → rename
         QWidget.setTabOrder(self.step1, self.step2)
         QWidget.setTabOrder(self.step2, self.step3)
+        self.step1.textChanged.connect(self._check_step)
+        for b in (self.step2, self.step3):         # a filled "then…" box changes what's offered
+            b.textChanged.connect(lambda _: self._check_step(self.step1.text()))
+        QShortcut(QKeySequence("Alt+H"), self, activated=self._smaller)
+        QShortcut(QKeySequence("Alt+S"), self, activated=self._split)
 
     def load(self, task: Task) -> None:
         self.task = task
@@ -250,7 +303,8 @@ class ShrinkPage(QWidget):
         self.title_edit.setCursorPosition(0)
         for e in (self.step1, self.step2, self.step3):
             e.clear()
-        self._show_nudge(task)
+        self.cut_lab.hide()
+        self.step1.setPlaceholderText(STEP_HINT)
         self.history = self.store.recent_steps(task.id)
         self.pos = -1
         self._fill_past(task)
@@ -272,20 +326,39 @@ class ShrinkPage(QWidget):
     def _boxes(self) -> tuple[QLineEdit, QLineEdit, QLineEdit]:
         return (self.step1, self.step2, self.step3)
 
-    def _show_nudge(self, task: Task) -> None:
-        # Transcript: "If you still didn't start, the step wasn't small enough yet. Cut it in
-        # half again." Worded as an invitation, never as a reminder that it didn't happen.
-        if task.nudge is None:
-            self.nudge_lab.hide()
-            self.step1.setPlaceholderText(STEP_HINT)
-            return
-        if task.nudge:
-            text = f"✂ Make it smaller. Last time: “{task.nudge}”. What's half of that?"
-        else:
-            text = "✂ Make it smaller than feels reasonable: what do your hands do first?"
-        self.nudge_lab.setText(text)
-        self.nudge_lab.show()
+    # ---- reframing a step, only when the person wants it
+    def _smaller(self) -> None:
+        """✂ Cut it in half: keep the too-big step in view and ask for half of it."""
+        big = self.step1.text().strip()
+        self.cut_lab.setText(f"✂ Too big: “{big}”. What's half of that?" if big else
+                             "✂ Smaller than feels reasonable: what do your hands do first?")
+        self.cut_lab.show()
+        self.step1.clear()
         self.step1.setPlaceholderText("half of it…")
+        self.step1.setFocus()
+
+    def _check_step(self, text: str) -> None:
+        if is_vague(text):
+            self.step_hint.setText("Make it physical: what do your hands do first? "
+                                   "(open, type, pick up, write…)")
+        elif split_step(text) and self._free_box():
+            self.step_hint.setText('That looks like two actions. <a href="split" style="color:'
+                                   f'{ACCENT}">Split it</a> (Alt+S): the second goes into “then…”.')
+        else:
+            self.step_hint.hide()
+            return
+        self.step_hint.show()
+
+    def _free_box(self) -> QLineEdit | None:
+        return next((b for b in (self.step2, self.step3) if not b.text().strip()), None)
+
+    def _split(self) -> None:
+        parts, box = split_step(self.step1.text()), self._free_box()
+        if not parts or not box:
+            return
+        self.step1.setText(parts[0])
+        box.setText(parts[1])
+        self.step1.setFocus()
 
     def _rename(self) -> None:
         new = self.title_edit.text().strip()
@@ -302,14 +375,13 @@ class ShrinkPage(QWidget):
         starts, secs = self.store.task_totals(task.id)
         for started, steps, sec, times in self.history:
             extra = f" ×{times}" if times > 1 else ""
-            self.past.addItem(f"{_when(started)} · {_dur(sec)}{extra}  —  " + "  →  ".join(steps))
+            self.past.addItem(f"{_when(started)}, {_dur(sec)}{extra}:  " + "  →  ".join(steps))
         shown = min(len(self.history), 5)
         self.past.setFixedHeight(shown * self.past.sizeHintForRow(0) + 4 if shown else 0)
         self.past.setVisible(bool(self.history))
-        if self.history:
-            self.past_lab.setText(f"Past actions  ·  {starts} start{'s' * (starts != 1)}"
-                                  f"  ·  {_dur(secs)} on this task  ·  ↓↑ or click to reuse")
-        self.past_lab.setVisible(bool(self.history))
+        self.tally.setText(f'<b style="color:{ACCENT}">{_plural(starts, "start")}</b><br>'
+                           f"{_dur(secs)} so far" if starts else "new")
+        self.past_head.setVisible(bool(self.history))
         self.past.clearSelection()
 
     def _recall_to(self, row: int) -> None:
@@ -350,11 +422,9 @@ class Popup(QWidget):
         super().__init__(None, Qt.Window | Qt.WindowStaysOnTopHint)
         self.setWindowTitle("Two-Minute Start")
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.resize(520, 460)
+        self.resize(560, 600)
         self.task: Task | None = None
         self._started = False
-        self._reached: Task | None = None   # last task shown on the actions screen
-        self.store = store
 
         self.pick = PickPage(store)
         self.shrink = ShrinkPage(store, seconds)
@@ -362,7 +432,7 @@ class Popup(QWidget):
         self.stack.addWidget(self.pick)
         self.stack.addWidget(self.shrink)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(18, 16, 18, 14)
+        lay.setContentsMargins(26, 22, 26, 16)
         lay.addWidget(self.stack)
 
         self.pick.chosen.connect(self._to_shrink)
@@ -378,7 +448,6 @@ class Popup(QWidget):
 
     def _to_shrink(self, task: Task) -> None:
         self.task = task
-        self._reached = task
         self.shrink.load(task)
         self.stack.setCurrentWidget(self.shrink)
 
@@ -401,13 +470,5 @@ class Popup(QWidget):
         self.close()
 
     def closeEvent(self, ev):
-        # "Cut it in half?" bookkeeping: any offer shown this time is spent (once only); if we
-        # reached the actions screen but didn't start, offer it next time instead.
-        self.store.clear_nudges(self.pick.offered)
-        # Already offered this time and still not started? Leave it: once means once.
-        if (not self._started and self._reached is not None
-                and self._reached.id not in self.pick.offered):
-            same = self.shrink.task is self._reached
-            self.store.set_nudge(self._reached.id, self.shrink.step1.text() if same else "")
         self.closed.emit()
         super().closeEvent(ev)

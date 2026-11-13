@@ -100,13 +100,14 @@ def main(argv: list[str] | None = None) -> int:
     from . import notify
     from .app import Controller
     from .core.store import Store
-    from .ui.style import QSS
+    from .ui.style import QSS, load_fonts
 
     app = QApplication(sys.argv[:1])
     app.setApplicationName("twomin")
     app.setDesktopFileName("twomin")
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(QIcon(str(notify.ICON)))
+    load_fonts()
     app.setStyleSheet(QSS)
     seconds = args.seconds or int(_load_config().get("seconds", 120))
 

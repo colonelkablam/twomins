@@ -13,7 +13,7 @@ Tray icon needs the AppIndicator extension, which the installer adds. Log out an
 | Where | Keys |
 |---|---|
 | Picker | type a task + Enter · ↓ into list · Del let it go · Ctrl+R pick for me · Esc close |
-| Shrink | Enter start · Tab next step · ↓ older / ↑ newer past action, or click · Esc back |
+| Shrink | Enter start · Tab next step · ↓ older / ↑ newer past action, or click · Alt+H ✂ smaller · Alt+S split · Esc back |
 | Timer | N note · ⇧S or Esc stop (still counts) · ⇧D whole task done · drag to move |
 | Finish | clock keeps counting · Enter keep going (silent) · 2 another round · ⇧S stop · ⇧D done |
 | After ⇧D | U undo (5 s) · Enter close now |

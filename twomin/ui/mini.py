@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from ..core.models import DONE, EARLY, STOPPED
 from ..core.timer import Countdown
-from .style import FLOW_QSS
+from .style import FLOW_QSS, keys
 
 RUN, FINISH, UNDO = 0, 1, 2
 UNDO_MS = 5000
@@ -29,6 +29,8 @@ FLASH_MS = 1800
 def _lab(text: str, name: str, wrap: bool = True) -> QLabel:
     lab = QLabel(text, objectName=name)
     lab.setWordWrap(wrap)
+    if name == "keys":
+        lab.setTextFormat(Qt.RichText)
     return lab
 
 
@@ -94,8 +96,8 @@ class MiniTimer(QWidget):
         rl.addWidget(self.saved)
         rl.addWidget(_btn("Stop ✓   ⇧S", "stop", self._stop))
         rl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
-        rl.addWidget(_lab("N note  ·  Esc also stops (still counts)  ·  drag to move", "hint"))
-        self.week_lab = _lab(week, "hint")
+        rl.addWidget(_lab(keys(("N", "note"), ("Esc", "stop, still counts"), ("drag", "move")), "keys"))
+        self.week_lab = _lab(week, "meta")
         rl.addWidget(self.week_lab)
 
         # --- FINISH: after the beep. The clock keeps counting here.
@@ -112,7 +114,7 @@ class MiniTimer(QWidget):
         fl.addWidget(_btn(f"+{rnd}   2", "round", self._another_round))
         fl.addWidget(_btn("Stop here ✓   ⇧S", "stop", self._stop))
         fl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
-        fl.addWidget(_lab("Enter: keep going, no more beeps  ·  2: another round", "hint"))
+        fl.addWidget(_lab(keys(("⏎", "keep going, no more beeps"), ("2", "another round")), "keys"))
 
         # --- UNDO: a short grace period after "done"
         und = QWidget()
@@ -120,7 +122,7 @@ class MiniTimer(QWidget):
         ul.addWidget(_lab("Started and finished ✓", "win"))
         ul.addWidget(_lab(f"Whole task done. {week}.", "muted"))
         ul.addWidget(_btn("Undo   U", slot=self._undo))
-        ul.addWidget(_lab("Closes in a moment  ·  U undo  ·  Enter close now", "hint"))
+        ul.addWidget(_lab(keys(("U", "undo"), ("⏎", "close now")) + "&nbsp;&nbsp;&nbsp;&nbsp;closes in a moment", "keys"))
         self.undo_timer = QTimer(self, singleShot=True, interval=UNDO_MS,
                                  timeout=lambda: self._finish(DONE))
 
