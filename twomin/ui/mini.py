@@ -60,7 +60,11 @@ class MiniTimer(QWidget):
         rl.addWidget(self.pad)
         self.saved = QLabel("", objectName="hint")
         rl.addWidget(self.saved)
-        rl.addWidget(QLabel("N note  ·  Esc stop (still counts)  ·  drag to move", objectName="hint"))
+        done_early = QPushButton("Whole task done ✓   D", objectName="good")
+        done_early.setFocusPolicy(Qt.NoFocus)        # keep keys on the timer, not the button
+        done_early.clicked.connect(lambda: self._finish(DONE))
+        rl.addWidget(done_early)
+        rl.addWidget(QLabel("N note  ·  D done  ·  Esc stop (still counts)  ·  drag", objectName="hint"))
 
         # --- finish view
         fin = QWidget()
@@ -125,7 +129,7 @@ class MiniTimer(QWidget):
             self._keep_going()
         elif finished and k == Qt.Key_S:
             self._finish(STOPPED)
-        elif finished and k == Qt.Key_D:
+        elif k == Qt.Key_D:                # whole task done: any time, beep or not
             self._finish(DONE)
         else:
             super().keyPressEvent(e)
