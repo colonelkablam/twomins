@@ -101,9 +101,9 @@ class MiniTimer(QWidget):
         rl.addWidget(self.pad)
         self.saved = _lab("", "hint")
         rl.addWidget(self.saved)
-        rl.addWidget(_btn("Stop ✓   ⇧S", "stop", self._stop))
+        rl.addWidget(_btn("Stop ✓   Esc", "stop", self._stop))
         rl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
-        rl.addWidget(_lab(keys(("N", "note"), ("Esc", "stop, still counts"), ("drag", "move")), "keys"))
+        rl.addWidget(_lab(keys(("N", "note"), ("drag", "move"), ("⇧S", "also stops")), "keys"))
         self.week_lab = _lab(week, "meta")
         rl.addWidget(self.week_lab)
 
@@ -119,7 +119,7 @@ class MiniTimer(QWidget):
         fl.addWidget(_btn("✦ Keep going   ⏎", "flow", self._keep_going))
         rnd = f"{seconds // 60} min" if seconds % 60 == 0 else Countdown.fmt(seconds)
         fl.addWidget(_btn(f"+{rnd}   2", "round", self._another_round))
-        fl.addWidget(_btn("Stop here ✓   ⇧S", "stop", self._stop))
+        fl.addWidget(_btn("Stop here ✓   Esc", "stop", self._stop))
         fl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
         fl.addWidget(_lab(keys(("⏎", "keep going, no more beeps"), ("2", "another round")), "keys"))
 
@@ -129,7 +129,7 @@ class MiniTimer(QWidget):
         ul.addWidget(_lab("Started and finished ✓", "win"))
         ul.addWidget(_lab(f"Whole task done. {week}.", "muted"))
         ul.addWidget(_btn("Undo   U", slot=self._undo))
-        ul.addWidget(_lab(keys(("U", "undo"), ("⏎", "close now")) + "&nbsp;&nbsp;&nbsp;&nbsp;closes in a moment", "keys"))
+        ul.addWidget(_lab(keys(("U or Esc", "undo"), ("⏎", "close now")) + "&nbsp;&nbsp;&nbsp;&nbsp;closes in a moment", "keys"))
         self.undo_timer = QTimer(self, singleShot=True, interval=UNDO_MS,
                                  timeout=lambda: self._finish(DONE))
 
@@ -211,9 +211,9 @@ class MiniTimer(QWidget):
         shift = bool(e.modifiers() & Qt.ShiftModifier)
         enter = k in (Qt.Key_Return, Qt.Key_Enter)
         if view == UNDO:
-            if k == Qt.Key_U:
+            if k in (Qt.Key_U, Qt.Key_Escape):        # Esc backs out, as everywhere else
                 self._undo()
-            elif enter or k == Qt.Key_Escape or (shift and k == Qt.Key_D):
+            elif enter or (shift and k == Qt.Key_D):
                 self._finish(DONE)
         elif k == Qt.Key_Escape:
             self._escape()

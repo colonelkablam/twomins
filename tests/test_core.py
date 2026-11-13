@@ -112,6 +112,19 @@ def test_step_checks():
     assert split_step("pick up 5 socks") is None and split_step("A and B") is None
 
 
+def test_hide_and_rename_actions():
+    s = Store(":memory:")
+    a = s.add_task("x")
+    for steps in (["Serach garages"], ["typo-ish thing"], ["Serach garages"]):
+        ss = s.start_session(a.id, steps); s.end_session(ss.id, 60, 0, STOPPED)
+    s.rename_steps(a.id, ["Serach garages"], ["Search garages "])
+    assert [h[1] for h in s.recent_steps(a.id)] == [["Search garages"], ["typo-ish thing"]]
+    assert s.recent_steps(a.id)[0][3] == 2                              # both starts renamed
+    s.hide_steps(a.id, ["typo-ish thing"])
+    assert [h[1] for h in s.recent_steps(a.id)] == [["Search garages"]]
+    assert s.task_totals(a.id) == (3, 180)                              # time still counts
+
+
 if __name__ == "__main__":
     test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
-    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_step_checks(); print("ok")
+    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_step_checks(); test_hide_and_rename_actions(); print("ok")

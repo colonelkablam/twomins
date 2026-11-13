@@ -117,7 +117,9 @@ beyond what's passed in. Styling only in `ui/style.py`.
 - **Task → actions:** a task is the blurry pile; each session is one start holding the 1–3
   physical actions typed for it. Actions are never dismissed: stopping ends the *session*, and the
   Shrink screen lists past actions (`recent_steps()`, distinct step sets with summed time) plus
-  `task_totals()` (starts, total time) so they can be picked up again.
+  `task_totals()` (starts, total time) so they can be picked up again. An earlier action can be
+  renamed (`rename_steps`, e.g. typos) or hidden from the list (`sessions.hidden`, migration 4);
+  neither deletes anything, so totals never drop.
 - **Picker list is short by design:** `open_tasks()` shows at most 5 tasks touched in the last 14
   days. Older ones fade without any flag; `search_open()` (used as soon as you type) covers all open
   tasks. `let_go` hides a task for good without calling it done.
@@ -128,14 +130,19 @@ beyond what's passed in. Styling only in `ui/style.py`.
 
 ## Keys
 
-| Screen | Keys |
+One scheme across the app. Keep new keys inside it.
+
+| Key | Means, on every screen |
 |---|---|
-| Picker | type + Enter (new or exact match) · ↓ into list · Del let it go · Ctrl+R random · Esc close |
-| Shrink | Enter start · Tab next field · ↓ older / ↑ newer past action, or click one (your typing is kept) · Alt+H ✂ smaller · Alt+S split two actions · Esc back |
-| Timer | N note · ⇧S or Esc stop (still counts) · ⇧D whole task done (any time) · drag to move |
-| Finish (clock keeps counting) | Enter keep going (focus mode) · 2 another round with a beep · ⇧S stop · ⇧D done |
-| Focus mode | N note · ⇧S or Esc stop · ⇧D done |
-| After ⇧D | U undo (5 s) · Enter close now |
+| Enter | the main thing: choose · start · save · keep going |
+| Esc | one step back or cancel: close · back · cancel a rename · **stop the timer** (shown on the Stop button) · undo "done" |
+| ↓↑ | move through a list (picker tasks, earlier actions) |
+| F2 | rename the highlighted thing (task, or earlier action) |
+| ⇧Del | hide the highlighted thing: "let go" a task, hide an earlier action. Nothing is deleted. Like Shift+Del removing a browser suggestion; only while an action is unedited |
+| Alt+H / Alt+S | step tools: half it / split two actions |
+| Ctrl+R | pick a task for me |
+| ⇧D / ⇧S | whole task done / stop (⇧S is an alias for Esc). Not Ctrl+D/Ctrl+S: those mean close and save elsewhere and get pressed by reflex |
+| N · 2 · U | timer only (no text box there): note · another round · undo |
 
 Single-letter keys are handled in `MiniTimer.keyPressEvent`, **not** with `QShortcut`.
 Otherwise typing in the notepad would trigger them. Ending a session (stop/done) needs **Shift**,

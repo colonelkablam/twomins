@@ -10,7 +10,7 @@ from datetime import datetime
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
+    QMenu, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -44,12 +44,22 @@ def _headed(left: QWidget, right: QWidget) -> QHBoxLayout:
     return row
 
 
+# The same list keys on both screens: F2 renames the highlighted thing, ⇧Del hides it
+# (as browsers use Shift+Del to remove a suggestion from a list). Nothing is ever deleted.
+LIST_KEYS = "F2 rename    ⇧Del %s"
+
+
+def _is_hide(ev) -> bool:
+    return ev.key() == Qt.Key_Delete and bool(ev.modifiers() & Qt.ShiftModifier)
+
+
 def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'s' * (n != 1)}"
 
 
 class PickPage(QWidget):
     chosen = Signal(object)  # Task
+    rename = Signal(object)  # Task: open it with the title ready to edit (F2)
 
     def __init__(self, store: Store):
         super().__init__()
@@ -62,10 +72,9 @@ class PickPage(QWidget):
         self.list.setFocusPolicy(Qt.StrongFocus)
         self.week = _score()
         self.older = _label("", "meta")
-        self.older.setAlignment(Qt.AlignRight)
         self.status = _label("", "meta")
-        footer = _label(keys(("⏎", "choose"), ("↓", "list"), ("Del", "let it go"),
-                             ("Ctrl+R", "pick for me"), ("Esc", "close")), "keys")
+        footer = _label(keys(("⏎", "choose"), ("↓↑", "list"), ("Ctrl+R", "pick for me"),
+                             ("Esc", "close")), "keys")
         footer.setTextFormat(Qt.RichText)
 
         lay = QVBoxLayout(self)
@@ -73,8 +82,10 @@ class PickPage(QWidget):
         lay.addLayout(_headed(_label("What are you avoiding?", "hero"), self.week))
         lay.addWidget(self.edit)
         lay.addSpacing(8)
-        lay.addLayout(_headed(_label("Carry on", "section"), self.older))
+        lay.addLayout(_headed(_label("Carry on", "section"), _label(LIST_KEYS % "let go", "meta",
+                                                                    wrap=False)))
         lay.addWidget(self.list, 1)
+        lay.addWidget(self.older)
         lay.addWidget(self.status)
         lay.addWidget(footer)
 
@@ -92,7 +103,8 @@ class PickPage(QWidget):
         self.tasks = self.store.open_tasks()
         self._show_week()
         hidden = self.store.count_open() - len(self.tasks)
-        self.older.setText("type to find older ones" if hidden > 0 else "")
+        self.older.setText("Older ones: type to find them." if hidden > 0 else "")
+        self.older.setVisible(hidden > 0)
         self._filter(self.edit.text())
 
     def _filter(self, text: str) -> None:
@@ -129,9 +141,16 @@ class PickPage(QWidget):
         if obj is self.edit and ev.key() == Qt.Key_Down and self.list.count():
             self.list.setFocus()                 # ↓ from the text box jumps into the list
             return True
-        if obj is self.list and ev.key() == Qt.Key_Delete and self.list.currentItem():
-            task = self.list.currentItem().data(Qt.UserRole)
+        item = self.list.currentItem()
+        # ⇧Del: let the highlighted task go. From the text box only while it's empty, so it
+        # never fights with editing what you're typing.
+        if item and _is_hide(ev) and (obj is self.list or not self.edit.text()):
+            task = item.data(Qt.UserRole)
             QTimer.singleShot(0, lambda: self._let_go(task))   # not mid key-event
+            return True
+        if item and ev.key() == Qt.Key_F2:         # F2: rename the highlighted task
+            task = item.data(Qt.UserRole)
+            QTimer.singleShot(0, lambda: self.rename.emit(task))
             return True
         return super().eventFilter(obj, ev)
 
@@ -195,7 +214,7 @@ def _task_line(t: Task) -> str:
 def _dur(seconds: int | float) -> str:
     m = int(seconds // 60)
     if m < 1:
-        return "<1 min" if seconds else "0 min"
+        return "<1 min"                               # never show a zero
     return f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d} min"
 
 
@@ -219,19 +238,30 @@ class ShrinkPage(QWidget):
         self.title_edit.setToolTip("Click to rename this task")
         self.title_edit.returnPressed.connect(self.step1.setFocus)   # Enter here never starts
         self.title_edit.editingFinished.connect(self._rename)
-        start = QPushButton(f"Start {seconds // 60}:{seconds % 60:02d}  ▶", objectName="primary")
+        self.start_label = f"Start {seconds // 60}:{seconds % 60:02d}  ▶"
+        start = QPushButton(self.start_label, objectName="primary")
+        self.start_btn = start
+        self.editing: list[str] | None = None     # steps of an earlier action being renamed
         back = QPushButton("← Back", objectName="quiet")
         self.tally = _score()
 
         # Past actions: every earlier start of this task, newest first. Click or ↑/↓ to reuse.
         self.past_head = QWidget()
-        ph = _headed(_label("Earlier actions", "section"), _label("↓↑ or click to reuse", "meta"))
+        ph = _headed(_label("Earlier actions", "section"),
+                     _label(LIST_KEYS % "hide", "meta", wrap=False))
         ph.setContentsMargins(0, 0, 0, 0)
         self.past_head.setLayout(ph)
         self.past = QListWidget(objectName="past")
         self.past.setFocusPolicy(Qt.NoFocus)           # keys stay in the step boxes
         self.past.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.past.itemClicked.connect(lambda it: self._recall_to(self.past.row(it)))
+        self.past.itemDoubleClicked.connect(lambda it: self._edit_past(self.past.row(it)))
+        self.past.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.past.customContextMenuRequested.connect(self._past_menu)
+        self.past_msg = _label("", "meta")
+        self.past_msg.hide()
+        self.edit_lab = _label("Renaming an earlier action.  ⏎ save  ·  Esc cancel", "nudge")
+        self.edit_lab.hide()
 
         lay = QVBoxLayout(self)
         lay.setSpacing(8)
@@ -244,6 +274,7 @@ class ShrinkPage(QWidget):
         self.cut_lab = _label("", "nudge")
         self.cut_lab.hide()
         lay.addWidget(self.cut_lab)
+        lay.addWidget(self.edit_lab)
         lay.addWidget(self.step1)
         # Quiet live hints while typing: "make it physical" / "that's two actions"
         self.step_hint = _label("", "nudge")
@@ -258,6 +289,7 @@ class ShrinkPage(QWidget):
         lay.addSpacing(10)
         lay.addWidget(self.past_head)
         lay.addWidget(self.past)
+        lay.addWidget(self.past_msg)
         lay.addWidget(self.context)
         lay.addStretch(1)
         row = QHBoxLayout()
@@ -266,7 +298,7 @@ class ShrinkPage(QWidget):
         row.addWidget(start)
         lay.addLayout(row)
         footer = _label(keys(("⏎", "start"), ("Tab", "next box"), ("↓↑", "earlier"),
-                             ("Alt+H", "smaller"), ("Alt+S", "split"), ("Esc", "back")), "keys")
+                             ("Alt+H", "half"), ("Alt+S", "split"), ("Esc", "back")), "keys")
         footer.setTextFormat(Qt.RichText)
         lay.addWidget(footer)
 
@@ -289,6 +321,7 @@ class ShrinkPage(QWidget):
             b.textChanged.connect(lambda _: self._check_step(self.step1.text()))
         QShortcut(QKeySequence("Alt+H"), self, activated=self._smaller)
         QShortcut(QKeySequence("Alt+S"), self, activated=self._split)
+        QShortcut(QKeySequence("F2"), self, activated=self._f2)
 
     def load(self, task: Task) -> None:
         self.task = task
@@ -297,9 +330,12 @@ class ShrinkPage(QWidget):
         for e in (self.step1, self.step2, self.step3):
             e.clear()
         self.cut_lab.hide()
+        self.past_msg.hide()
+        self._end_edit()
         self.step1.setPlaceholderText(STEP_HINT)
         self.history = self.store.recent_steps(task.id)
         self.pos = -1
+        self.draft = ["", "", ""]
         self._fill_past(task)
         bits = []
         notes = self.store.notes_for(task.id)[-3:]
@@ -311,7 +347,13 @@ class ShrinkPage(QWidget):
 
     # ---- ↑/↓ cycle through earlier steps for this task (like shell history)
     def eventFilter(self, obj, e):
-        if e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Up, Qt.Key_Down) and self.history:
+        # ⇧Del hides the highlighted earlier action, but only while the boxes still show it
+        # unedited; otherwise the key keeps its normal text-box meaning. Caught before QLineEdit.
+        if e.type() == QEvent.KeyPress and _is_hide(e) and self._showing_unedited():
+            QTimer.singleShot(0, lambda: self._hide_past(self.pos))
+            return True
+        if (e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Up, Qt.Key_Down) and self.history
+                and self.editing is None):
             self._recall(+1 if e.key() == Qt.Key_Down else -1)   # ↓ = down the list = older
             return True
         return super().eventFilter(obj, e)
@@ -377,6 +419,86 @@ class ShrinkPage(QWidget):
         self.past_head.setVisible(bool(self.history))
         self.past.clearSelection()
 
+    # ---- earlier actions: rename / hide (never deleted: their starts and time still count)
+    def _past_menu(self, point) -> None:
+        item = self.past.itemAt(point)
+        if item is None:
+            return
+        row = self.past.row(item)
+        menu = QMenu(self)
+        menu.addAction("Rename…", lambda: self._edit_past(row))
+        menu.addAction("Hide from list", lambda: self._hide_past(row))
+        menu.exec(self.past.viewport().mapToGlobal(point))
+
+    def _edit_past(self, row: int) -> None:
+        if not 0 <= row < len(self.history):
+            return
+        if self.pos != row:
+            self._recall_to(row)
+        self.editing = self.history[row][1]
+        self.past_msg.hide()
+        self.edit_lab.show()
+        self.step_hint.hide()
+        self.start_btn.setText("Save ✓")
+        self.step1.setFocus()
+        self.step1.selectAll()
+
+    def _showing_unedited(self) -> bool:
+        if not 0 <= self.pos < len(self.history):
+            return False
+        shown = [b.text().strip() for b in self._boxes() if b.text().strip()]
+        return shown == self.history[self.pos][1]
+
+    def _f2(self) -> None:
+        """F2 renames the highlighted thing: an earlier action if one is up, else the task."""
+        if self.pos >= 0:
+            self._edit_past(self.pos)
+        else:
+            self.rename_task()
+
+    def rename_task(self) -> None:
+        self.title_edit.setFocus()
+        self.title_edit.selectAll()
+
+    def _end_edit(self) -> None:
+        self.editing = None
+        self.edit_lab.hide()
+        self.start_btn.setText(self.start_label)
+
+    def cancel_edit(self) -> bool:
+        """Esc while renaming (task title or an earlier action): cancel it. True if handled."""
+        if self.title_edit.hasFocus():
+            self.title_edit.setText(self.task.title if self.task else "")
+            self.step1.setFocus()
+            return True
+        if self.editing is None:
+            return False
+        self._end_edit()
+        self._recall(-1 - self.pos)
+        return True
+
+    def _save_rename(self, steps: list[str]) -> None:
+        old = self.editing
+        self.store.rename_steps(self.task.id, old, steps)
+        self._end_edit()
+        self._reload_past("Renamed. Same starts, same time.")
+
+    def _hide_past(self, row: int) -> None:
+        if not 0 <= row < len(self.history) or self.editing is not None:
+            return
+        self.store.hide_steps(self.task.id, self.history[row][1])
+        self._reload_past("Hidden from the list. Its time still counts.")
+
+    def _reload_past(self, msg: str) -> None:
+        self.history = self.store.recent_steps(self.task.id)
+        self.pos = -1
+        for b, text in zip(self._boxes(), self.draft):
+            b.setText(text)                            # back to what you'd typed yourself
+        self._fill_past(self.task)
+        self.past_msg.setText(msg)
+        self.past_msg.show()
+        self.step1.setFocus()
+
     def _recall_to(self, row: int) -> None:
         self._recall(row - self.pos)
         self.step1.setFocus()
@@ -400,6 +522,10 @@ class ShrinkPage(QWidget):
 
     def _go(self) -> None:
         steps = [e.text().strip() for e in (self.step1, self.step2, self.step3) if e.text().strip()]
+        if self.editing is not None:              # Enter in rename mode saves, never starts
+            if steps:
+                self._save_rename(steps)
+            return
         if not steps:
             self.step1.setFocus()
             self.step1.setPlaceholderText("Just one tiny thing — what do your hands do first?")
@@ -429,6 +555,7 @@ class Popup(QWidget):
         lay.addWidget(self.stack)
 
         self.pick.chosen.connect(self._to_shrink)
+        self.pick.rename.connect(lambda t: (self._to_shrink(t), self.shrink.rename_task()))
         self.shrink.back.connect(self._to_pick)
         self.shrink.go.connect(self._go)
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=lambda: QTimer.singleShot(0, self._escape))
@@ -451,7 +578,8 @@ class Popup(QWidget):
 
     def _escape(self) -> None:
         if self.stack.currentWidget() is self.shrink:
-            self._to_pick()
+            if not self.shrink.cancel_edit():
+                self._to_pick()
         else:
             self.close()
 

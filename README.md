@@ -14,7 +14,8 @@ It is a starting tool, not a to-do list. It counts starts, not completions.
 2. **The actions screen.** The task name is at the top (click it to rename). Type the smallest
    next physical action. If it feels too small to count, you got it right.
    - Under two minutes? Line up one or two more in the dashed boxes.
-   - ↓↑ or click to reuse an earlier action; nothing is ever dismissed.
+   - ↓↑ or click to reuse an earlier action. F2 renames it (typos), ⇧Del hides it from
+     the list; right-click for both. Hidden or renamed, its time still counts.
    - Quiet hints: "Make it physical" for vague steps, "Split it" (Alt+S) for two actions in
      one. Alt+H if the step feels too big: it asks for half of it.
 3. **Enter starts the timer.** "Started ✓" straight away: that's the win. The small window
@@ -23,23 +24,28 @@ It is a starting tool, not a to-do list. It counts starts, not completions.
    - **Keep going**: the window turns purple and counts up silently. That's flow, and it's
      counted as its own reward.
    - **+2 min**: another round with a beep.
-   - **Stop here** (⇧S or Esc): always a win.
+   - **Stop here** (Esc): always a win.
    - **Whole task done** (⇧D, any time): five seconds to undo with U.
 
 Tasks leave the list when they're done, when they fade (untouched for two weeks), or when you
-let them go (Del in the list). History is kept either way.
+let them go (⇧Del in the list). History is kept either way.
 
 ## Keys
-| Where | Keys |
-|---|---|
-| Picker | type + Enter · ↓ into list · Del let it go · Ctrl+R pick for me · Esc close |
-| Actions | Enter start · Tab next box · ↓ older / ↑ newer earlier action · Alt+H smaller · Alt+S split · ⇧Tab rename · Esc back |
-| Timer | N note · ⇧S or Esc stop (still counts) · ⇧D whole task done · drag to move |
-| After the beep | Enter keep going (flow) · 2 another round · ⇧S stop · ⇧D done |
-| After ⇧D | U undo (5 s) · Enter close now |
 
-Stop and done need Shift, and the beep doesn't take your keyboard, so a stray key typed into
-another window can't end a session. Super+T brings a running timer forward.
+| Key | Means, on every screen |
+|---|---|
+| Enter | the main thing: choose · start · save · keep going |
+| Esc | one step back or cancel: close · back · cancel a rename · **stop the timer** (shown on the Stop button) · undo "done" |
+| ↓↑ | move through a list (picker tasks, earlier actions) |
+| F2 | rename the highlighted thing (task, or earlier action) |
+| ⇧Del | hide the highlighted thing: "let go" a task, hide an earlier action. Nothing is deleted. Like Shift+Del removing a browser suggestion; only while an action is unedited |
+| Alt+H / Alt+S | step tools: half it / split two actions |
+| Ctrl+R | pick a task for me |
+| ⇧D / ⇧S | whole task done / stop (⇧S is an alias for Esc). Not Ctrl+D/Ctrl+S: those mean close and save elsewhere and get pressed by reflex |
+| N · 2 · U | timer only (no text box there): note · another round · undo |
+
+Stop is Esc, done needs Shift (⇧D), and the beep doesn't take your keyboard, so a stray key
+typed into another window can't end a session. Super+T brings a running timer forward.
 
 ## Install (Fedora GNOME)
     git clone git@github.com:colonelkablam/twomins.git ~/Projects/twomins

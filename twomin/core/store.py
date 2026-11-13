@@ -41,13 +41,15 @@ MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN let_go INTEGER NOT NULL DEFAULT 0",  # 1: "let it go"
     "ALTER TABLE sessions ADD COLUMN flow_seconds INTEGER NOT NULL DEFAULT 0",  # 2: time in flow
     "ALTER TABLE tasks ADD COLUMN nudge TEXT",  # 3: unused (close-based offer was removed)
+    "ALTER TABLE sessions ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0",  # 4: hidden from reuse
 ]
 
 # Open tasks, newest-touched first. "touched" = last start, or creation if never started.
 _OPEN = """
     SELECT * FROM (
         SELECT t.id, t.title,
-               (SELECT steps FROM sessions s WHERE s.task_id=t.id ORDER BY s.id DESC LIMIT 1),
+               (SELECT steps FROM sessions s WHERE s.task_id=t.id AND s.hidden=0
+                 ORDER BY s.id DESC LIMIT 1),
                (SELECT COUNT(*) FROM sessions s WHERE s.task_id=t.id),
                COALESCE((SELECT MAX(started) FROM sessions s WHERE s.task_id=t.id),
                         t.created) AS touched,
@@ -146,8 +148,8 @@ class Store:
         """
         out: dict[str, list] = {}
         for started, steps, secs in self.db.execute(
-            "SELECT started, steps, COALESCE(seconds, 0) FROM sessions WHERE task_id=? "
-            "ORDER BY id DESC", (task_id,)
+            "SELECT started, steps, COALESCE(seconds, 0) FROM sessions "
+            "WHERE task_id=? AND hidden=0 ORDER BY id DESC", (task_id,)
         ):
             if not steps:
                 continue
@@ -157,6 +159,18 @@ class Store:
             elif len(out) < limit:
                 out[steps] = [started, steps.split("\n"), secs, 1]
         return [tuple(v) for v in out.values()]
+
+    def hide_steps(self, task_id: int, steps: list[str]) -> None:
+        """Hide an earlier action from the reuse list. Its starts and time still count."""
+        self.db.execute("UPDATE sessions SET hidden=1 WHERE task_id=? AND steps=?",
+                        (task_id, "\n".join(steps)))
+        self.db.commit()
+
+    def rename_steps(self, task_id: int, old: list[str], new: list[str]) -> None:
+        """Reword an earlier action (e.g. a typo) everywhere it was used for this task."""
+        self.db.execute("UPDATE sessions SET steps=? WHERE task_id=? AND steps=?",
+                        ("\n".join(s.strip() for s in new), task_id, "\n".join(old)))
+        self.db.commit()
 
     def task_totals(self, task_id: int) -> tuple[int, int]:
         """(starts, total seconds) for a task. Only ever goes up."""
