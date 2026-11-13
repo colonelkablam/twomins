@@ -54,8 +54,7 @@ class Controller(QObject):
         if self.busy:
             return self.mini.bring_forward()
         self.session_id = self.store.start_session(task_id, steps).id
-        week = self.store.starts_since(7)            # includes the start just saved
-        self.mini = MiniTimer(title, steps, self.seconds, starts_week=week)
+        self.mini = MiniTimer(title, steps, self.seconds, week=week_text(self.store))
         self._refresh_stats()
         self.mini.note.connect(lambda text: self.store.add_note(task_id, self.session_id, text))
         self.mini.beeped.connect(self._beep)
@@ -66,20 +65,22 @@ class Controller(QObject):
         notify.chime()
         notify.desktop("Two minutes — you started ✓", "Stop here, or keep going if you want to.")
 
-    def _finished(self, outcome: str, seconds: float, kept_going: int) -> None:
-        self.store.end_session(self.session_id, seconds, kept_going, outcome)
+    def _finished(self, outcome: str, seconds: float, extra: int, flow: float) -> None:
+        self.store.end_session(self.session_id, seconds, extra, outcome, flow)
         self.mini = None
         self.session_id = None
-        n = self.store.starts_since(7)
-        week = f"{n} start{'s' * (n != 1)} this week."
-        # Every ending leads with the start. The beep already told you on a plain stop.
+        week = week_text(self.store) + "."
+        flowed = f"✦ {_mins(flow)} in the flow. " if flow else ""
+        # Every ending leads with the start; flow is a second reward, named when it happened.
+        # The beep already said "you started" on a plain stop, so that one stays quiet.
         if outcome == DONE:
-            notify.desktop("Started and finished ✓", week)
+            notify.desktop("Started and finished ✓", flowed + week)
         elif outcome == EARLY:
             notify.desktop("Started ✓ That's the win.", f"Saved for next time. {week}")
-        elif outcome == STOPPED and kept_going:
-            mins = int(seconds // 60)
-            notify.desktop("Started ✓", f"You kept going for {mins} min. {week}")
+        elif flow:
+            notify.desktop("Started ✓ and found the flow ✦", flowed + week)
+        elif extra:
+            notify.desktop("Started ✓", f"You kept going for {_mins(seconds)}. {week}")
         self._refresh_stats()
         if not self.keep_alive():
             self.app.quit()
@@ -110,8 +111,20 @@ class Controller(QObject):
     def _refresh_stats(self) -> None:
         if self.tray is None and not hasattr(self, "_stats"):
             return
-        n = self.store.starts_since(7)
-        text = f"{n} start{'s' * (n != 1)} this week"
+        text = week_text(self.store)
         self._stats.setText(text)
         if self.tray is not None:
             self.tray.setToolTip(f"Two-Minute Start · {text}")
+
+
+def week_text(store: Store) -> str:
+    """'5 starts · 2 flows this week': both rewards, counted up, never a ratio."""
+    n = store.starts_since(7)
+    f, _ = store.flows_since(7)
+    flows = f" · {f} flow{'s' * (f != 1)}" if f else ""
+    return f"{n} start{'s' * (n != 1)}{flows} this week"
+
+
+def _mins(seconds: float) -> str:
+    m = int(seconds // 60)
+    return f"{m} min" if m else "under a minute"

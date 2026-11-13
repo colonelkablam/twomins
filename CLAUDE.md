@@ -27,7 +27,7 @@ Key ideas the app must keep:
 | Go straight in, don't think | Enter starts immediately; no confirmation dialogs |
 | Offload to a sticky pad | `N` opens a notepad in the timer; notes are saved per task and shown next time |
 | Momentum after the beep | Finish: Keep going / Stop here ✓ / Whole task done ✓ |
-| Once started, keeping going is easier than quitting | Focus mode: "Keep going" switches to a silent count-up; no more beeps |
+| Once started, keeping going is easier than quitting | Flow: "Keep going" turns the timer purple and counts up silently; flow time is recorded and celebrated |
 | Relief comes from starting, not avoiding | "Started ✓" the moment you press Enter; weekly start count on the timer, finish screen, tray |
 | If-then cues (implementation intentions) | **v3**: "If I [cue] → start [task]" |
 | Didn't start? Step wasn't small enough | **v2.1 (next)**: gentle "Cut the step in half?" |
@@ -102,6 +102,11 @@ beyond what's passed in. Styling only in `ui/style.py`.
 - Data: `~/.local/share/twomin/twomin.db`. Config: `~/.config/twomin/config.toml` (`seconds = 120`).
 - Session outcomes: `task_done`, `stopped`, `stopped_early`. All count as starts.
   `sessions.extensions` is now 1 if the person kept going into focus mode (it used to count +2 rounds).
+- **Colours mean states** (all in `ui/style.py`): yellow = starting (countdown, +2 round),
+  calm blue = stop (never red: stopping isn't failing), green = whole task done, purple = flow.
+  Entering flow sets `FLOW_QSS` on the timer window so the whole window turns purple.
+- **Flow is a second reward:** `sessions.flow_seconds` (migration 2) records time in flow;
+  `flows_since()` feeds "N starts · M flows this week" (tray, timer, notifications).
 - **Task → actions:** a task is the blurry pile; each session is one start holding the 1–3
   physical actions typed for it. Actions are never dismissed: stopping ends the *session*, and the
   Shrink screen lists past actions (`recent_steps()`, distinct step sets with summed time) plus

@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS notes (
 # Append only, never edit an entry that has shipped.
 MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN let_go INTEGER NOT NULL DEFAULT 0",  # 1: "let it go"
+    "ALTER TABLE sessions ADD COLUMN flow_seconds INTEGER NOT NULL DEFAULT 0",  # 2: time in flow
 ]
 
 # Open tasks, newest-touched first. "touched" = last start, or creation if never started.
@@ -153,11 +154,12 @@ class Store:
             (task_id,)).fetchone()
         return n, secs
 
-    def end_session(self, session_id: int, seconds: float, extensions: int, outcome: str) -> None:
+    def end_session(self, session_id: int, seconds: float, extensions: int, outcome: str,
+                    flow_seconds: float = 0) -> None:
         self.db.execute(
             """UPDATE sessions SET ended=datetime('now','localtime'),
-               seconds=?, extensions=?, outcome=? WHERE id=?""",
-            (int(seconds), extensions, outcome, session_id),
+               seconds=?, extensions=?, outcome=?, flow_seconds=? WHERE id=?""",
+            (int(seconds), extensions, outcome, int(flow_seconds), session_id),
         )
         if outcome == DONE:
             self.db.execute(
@@ -190,6 +192,13 @@ class Store:
             "SELECT text FROM notes WHERE task_id=? ORDER BY id", (task_id,))]
 
     # ---- stats: count STARTS, not completions
+    def flows_since(self, days: int = 7) -> tuple[int, int]:
+        """(sessions that reached flow, total seconds in flow). A second reward, counted up."""
+        n, secs = self.db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(flow_seconds), 0) FROM sessions "
+            "WHERE flow_seconds > 0 AND started >= ?", (_ago(days),)).fetchone()
+        return n, secs
+
     def starts_since(self, days: int = 7) -> int:
         since = _ago(days)
         return self.db.execute(

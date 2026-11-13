@@ -82,6 +82,14 @@ def test_short_list_search_and_let_go():
     assert ids[1] not in [t.id for t in s.search_open("Task")] and s.count_open() == 6
 
 
+def test_flows_counted():
+    s = Store(":memory:")
+    a = s.add_task("x")
+    one = s.start_session(a.id, ["a"]); s.end_session(one.id, 600, 1, STOPPED, flow_seconds=480)
+    two = s.start_session(a.id, ["b"]); s.end_session(two.id, 120, 0, STOPPED)
+    assert s.flows_since(7) == (1, 480) and s.starts_since(7) == 2
+
+
 if __name__ == "__main__":
     test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
-    test_migrates_old_db(); test_short_list_search_and_let_go(); print("ok")
+    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); print("ok")

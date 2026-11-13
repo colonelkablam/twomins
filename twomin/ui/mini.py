@@ -19,14 +19,11 @@ from PySide6.QtWidgets import (
 
 from ..core.models import DONE, EARLY, STOPPED
 from ..core.timer import Countdown
+from .style import FLOW_QSS
 
 RUN, FINISH, UNDO = 0, 1, 2
 UNDO_MS = 5000
 FLASH_MS = 1800
-
-
-def _starts(n: int) -> str:
-    return f"{n} start{'s' * (n != 1)} this week"
 
 
 def _lab(text: str, name: str, wrap: bool = True) -> QLabel:
@@ -46,16 +43,18 @@ def _btn(text: str, name: str = "", slot=None) -> QPushButton:
 class MiniTimer(QWidget):
     beeped = Signal()
     note = Signal(str)
-    finished = Signal(str, float, int)  # outcome, seconds, extra (+2 rounds, +1 if focus mode)
+    finished = Signal(str, float, int, float)  # outcome, seconds, extra rounds/flow, flow seconds
 
-    def __init__(self, title: str, steps: list[str], seconds: int = 120, starts_week: int = 1):
+    def __init__(self, title: str, steps: list[str], seconds: int = 120,
+                 week: str = "1 start this week"):
         super().__init__(None, Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setWindowTitle("Two-Minute Start — timer")
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setFixedWidth(340)
         self.clock = Countdown(seconds)
         self.round_seconds = seconds
-        self.focus_mode = False          # after "keep going": count up, never beep again
+        self.focus_mode = False          # after "keep going": flow. Count up, never beep again
+        self._flow_from = 0.0
         self._beeped = False
         self._ending = False
         self._before_undo = RUN
@@ -81,7 +80,7 @@ class MiniTimer(QWidget):
         self.time_lab = QLabel(objectName="clock")
         self.time_lab.setAlignment(Qt.AlignCenter)
         rl.addWidget(self.time_lab)
-        self.flow_lab = _lab("in the flow · stop whenever you like", "muted")
+        self.flow_lab = _lab("✦ in the flow · stop whenever you like", "flow")
         self.flow_lab.setAlignment(Qt.AlignCenter)
         self.flow_lab.hide()
         rl.addWidget(self.flow_lab)
@@ -93,25 +92,25 @@ class MiniTimer(QWidget):
         rl.addWidget(self.pad)
         self.saved = _lab("", "hint")
         rl.addWidget(self.saved)
-        rl.addWidget(_btn("Stop ✓   ⇧S", slot=self._stop))
+        rl.addWidget(_btn("Stop ✓   ⇧S", "stop", self._stop))
         rl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
         rl.addWidget(_lab("N note  ·  Esc also stops (still counts)  ·  drag to move", "hint"))
-        self.week_lab = _lab(_starts(starts_week), "hint")
+        self.week_lab = _lab(week, "hint")
         rl.addWidget(self.week_lab)
 
         # --- FINISH: after the beep. The clock keeps counting here.
         fin = QWidget()
         fl = QVBoxLayout(fin)
         fl.addWidget(_lab("You started. ✓", "win"))
-        fl.addWidget(_lab(f"That's {_starts(starts_week)}. Stopping now is a win; "
+        fl.addWidget(_lab(f"That's {week}. Stopping now is a win; "
                           "keep going only if you want to.", "muted"))
         self.over_lab = _lab("", "step")
         self.over_lab.setAlignment(Qt.AlignCenter)
         fl.addWidget(self.over_lab)
-        fl.addWidget(_btn("Keep going   ⏎", "primary", self._keep_going))
+        fl.addWidget(_btn("✦ Keep going   ⏎", "flow", self._keep_going))
         rnd = f"{seconds // 60} min" if seconds % 60 == 0 else Countdown.fmt(seconds)
-        fl.addWidget(_btn(f"+{rnd}   2", slot=self._another_round))
-        fl.addWidget(_btn("Stop here ✓   ⇧S", slot=self._stop))
+        fl.addWidget(_btn(f"+{rnd}   2", "round", self._another_round))
+        fl.addWidget(_btn("Stop here ✓   ⇧S", "stop", self._stop))
         fl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
         fl.addWidget(_lab("Enter: keep going, no more beeps  ·  2: another round", "hint"))
 
@@ -119,7 +118,7 @@ class MiniTimer(QWidget):
         und = QWidget()
         ul = QVBoxLayout(und)
         ul.addWidget(_lab("Started and finished ✓", "win"))
-        ul.addWidget(_lab(f"Whole task done. {_starts(starts_week)}.", "muted"))
+        ul.addWidget(_lab(f"Whole task done. {week}.", "muted"))
         ul.addWidget(_btn("Undo   U", slot=self._undo))
         ul.addWidget(_lab("Closes in a moment  ·  U undo  ·  Enter close now", "hint"))
         self.undo_timer = QTimer(self, singleShot=True, interval=UNDO_MS,
@@ -210,8 +209,10 @@ class MiniTimer(QWidget):
 
     # ---- actions
     def _keep_going(self) -> None:
-        """Focus mode: switch to a quiet count-up. No more beeps; stop whenever."""
+        """Flow: a quiet count-up in purple. No more beeps; stop whenever."""
         self.focus_mode = True
+        self._flow_from = self.clock.elapsed()
+        self.setStyleSheet(FLOW_QSS)             # the whole window turns purple
         self.bar.hide()
         self.flow_lab.show()
         self._show(RUN)
@@ -278,7 +279,9 @@ class MiniTimer(QWidget):
         self._ending = True
         self.ticker.stop()
         self.undo_timer.stop()
-        result = (outcome, self.clock.elapsed(), self.clock.extensions + int(self.focus_mode))
+        elapsed = self.clock.elapsed()
+        flow = elapsed - self._flow_from if self.focus_mode else 0.0
+        result = (outcome, elapsed, self.clock.extensions + int(self.focus_mode), flow)
 
         def done() -> None:
             self.finished.emit(*result)

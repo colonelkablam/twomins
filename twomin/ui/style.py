@@ -5,7 +5,11 @@ PANEL = "#272830"
 FG = "#e8e8ec"
 MUTED = "#9a9ba6"
 ACCENT = "#f2b134"   # bee yellow
-GOOD = "#5cc98a"
+GOOD = "#5cc98a"     # whole task done
+CALM = "#7fb3e6"     # stop: resting is allowed (never red)
+FLOW = "#a78bfa"     # flow: its own reward
+FLOW_BG = "#1f1a2e"
+FLOW_PANEL = "#2b2442"
 
 QSS = f"""
 QWidget {{ background: {BG}; color: {FG}; font-size: 11pt; }}
@@ -37,7 +41,23 @@ QPushButton {{
 QPushButton:hover {{ border-color: {ACCENT}; }}
 QPushButton#primary {{ background: {ACCENT}; color: #000; font-weight: 700; border: none; }}
 QPushButton#good {{ background: {GOOD}; color: #000; font-weight: 700; border: none; }}
+QPushButton#stop {{ color: {CALM}; border: 1px solid {CALM}; }}
+QPushButton#round {{ color: {ACCENT}; border: 1px solid {ACCENT}; }}
+QPushButton#flow {{ background: {FLOW}; color: #14101f; font-weight: 700; border: none; }}
+QLabel#flow {{ color: {FLOW}; font-weight: 600; }}
 QProgressBar {{ background: {PANEL}; border: none; border-radius: 3px; max-height: 6px; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}
 QFrame#card {{ border: 1px solid #3a3b45; border-radius: 12px; }}
+"""
+
+# Applied to the timer window itself when it enters flow. A widget's own sheet beats the app
+# sheet regardless of specificity, so every background that must survive is restated here.
+FLOW_QSS = f"""
+QWidget {{ background: {FLOW_BG}; }}
+QFrame#card {{ border: 1px solid {FLOW}; border-radius: 12px; }}
+QLabel#clock {{ color: {FLOW}; }}
+QLabel#flow {{ color: {FLOW}; font-weight: 600; }}
+QPushButton {{ background: {FLOW_PANEL}; }}
+QPushButton#good {{ background: {GOOD}; }}
+QLineEdit {{ background: {FLOW_PANEL}; border: 1px solid {FLOW}; }}
 """
