@@ -136,7 +136,9 @@ def main(argv: list[str] | None = None) -> int:
         return app.exec()
 
     # No instance: become it.
-    ctrl = Controller(app, Store(), seconds, tray=True, resident=args.tray)
+    store = Store()
+    store.close_orphans()          # timers lost to a crash/logout: still starts, now ended
+    ctrl = Controller(app, store, seconds, tray=True, resident=args.tray)
     server = _serve(ctrl, app)  # noqa: F841 (keep a reference)
     if not args.tray:
         ctrl.show_popup()

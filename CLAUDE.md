@@ -113,6 +113,13 @@ beyond what's passed in. Styling only in `ui/style.py`.
 Single-letter keys are handled in `MiniTimer.keyPressEvent`, **not** with `QShortcut`.
 Otherwise typing in the notepad would trigger them.
 
+**Never close a window from inside its own key or click handler.** Defer it with
+`QTimer.singleShot(0, ...)`. On Fedora, IBus delivers key events late, from Qt's queue of
+pending events, so a window closed (and deleted) during `returnPressed` gets freed while
+`QLineEdit` is still handling the key, and the app segfaults. Headless tests can't catch this
+(no IBus); check on the real desktop. `close_orphans()` tidies starts a crash left open, and must
+only run in the process that becomes the instance.
+
 ## Commands
 
 ```bash

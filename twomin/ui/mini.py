@@ -25,6 +25,7 @@ class MiniTimer(QWidget):
         self.clock = Countdown(seconds)
         self.step_seconds = seconds
         self._beeped = False
+        self._ending = False
         self._drag: QPoint | None = None
 
         card = QFrame(objectName="card")
@@ -113,6 +114,8 @@ class MiniTimer(QWidget):
 
     def keyPressEvent(self, e):
         # Child widgets (the notepad) get keys first, so typing never triggers these.
+        if self._ending:
+            return
         k, finished = e.key(), self.stack.currentIndex() == 1
         if k == Qt.Key_Escape:
             self._escape()
@@ -163,9 +166,18 @@ class MiniTimer(QWidget):
         self.setFocus()
 
     def _finish(self, outcome: str) -> None:
+        # Deferred so we never close (and delete) the window from inside its own key or
+        # click handling; doing that segfaulted under IBus. The guard stops a double press.
+        if self._ending:
+            return
+        self._ending = True
         self.ticker.stop()
-        self.finished.emit(outcome, self.clock.elapsed(), self.clock.extensions)
-        self.close()
+        result = (outcome, self.clock.elapsed(), self.clock.extensions)
+
+        def done() -> None:
+            self.finished.emit(*result)
+            self.close()
+        QTimer.singleShot(0, done)
 
     # ---- frameless drag
     def mousePressEvent(self, e):

@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .models import DONE, Session, Task
+from .models import DONE, STOPPED, Session, Task
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
@@ -114,6 +114,17 @@ class Store:
                 (session_id,),
             )
         self.db.commit()
+
+    def close_orphans(self) -> int:
+        """End sessions left open by a crash or logout. They still count as starts.
+
+        Only call this from the process that owns timers (the instance) at startup,
+        or it would close a timer that is still running in another process.
+        """
+        cur = self.db.execute(
+            "UPDATE sessions SET ended=started, outcome=? WHERE ended IS NULL", (STOPPED,))
+        self.db.commit()
+        return cur.rowcount
 
     # ---- notes (the sticky pad)
     def add_note(self, task_id: int, session_id: int | None, text: str) -> None:

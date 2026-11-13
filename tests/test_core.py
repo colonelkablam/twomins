@@ -39,5 +39,15 @@ def test_recent_steps():
     assert s.recent_steps(a.id, limit=1)[0][1] == ["Search garages"]
 
 
+def test_close_orphans():
+    s = Store(":memory:")
+    a = s.add_task("x")
+    lost = s.start_session(a.id, ["a"])
+    ok = s.start_session(a.id, ["b"]); s.end_session(ok.id, 120, 0, DONE)
+    assert s.close_orphans() == 1 and s.close_orphans() == 0
+    assert s.db.execute("SELECT outcome FROM sessions WHERE id=?", (lost.id,)).fetchone() == (STOPPED,)
+    assert s.starts_since() == 2                      # still counts as a start
+
+
 if __name__ == "__main__":
-    test_countdown(); test_store(); test_recent_steps(); print("ok")
+    test_countdown(); test_store(); test_recent_steps(); test_close_orphans(); print("ok")

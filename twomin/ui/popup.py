@@ -7,7 +7,7 @@ from __future__ import annotations
 import random
 from datetime import datetime
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
@@ -155,10 +155,12 @@ class ShrinkPage(QWidget):
         self.pos = -1                     # -1 = your own typing; 0.. = history entries
         self.draft: list[str] = ["", "", ""]
 
+        # Deferred: acting on Enter closes the popup, and the line edit must finish handling
+        # its key event first (IBus delivers keys late; closing mid-event segfaulted).
         for e in (self.step1, self.step2, self.step3):
-            e.returnPressed.connect(self._go)
+            e.returnPressed.connect(lambda: QTimer.singleShot(0, self._go))
             e.installEventFilter(self)
-        start.clicked.connect(self._go)
+        start.clicked.connect(lambda: QTimer.singleShot(0, self._go))
         back.clicked.connect(self.back)
 
     def load(self, task: Task) -> None:
@@ -248,7 +250,7 @@ class Popup(QWidget):
         self.pick.chosen.connect(self._to_shrink)
         self.shrink.back.connect(self._to_pick)
         self.shrink.go.connect(self._go)
-        QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self._escape)
+        QShortcut(QKeySequence(Qt.Key_Escape), self, activated=lambda: QTimer.singleShot(0, self._escape))
 
     def present(self) -> None:
         self.show()
@@ -273,6 +275,8 @@ class Popup(QWidget):
             self.close()
 
     def _go(self, steps: list[str]) -> None:
+        if self._started:                 # a second Enter before we closed
+            return
         self._started = True
         self.start.emit(self.task.id, self.task.title, steps)
         self.close()
