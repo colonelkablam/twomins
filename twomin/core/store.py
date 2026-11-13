@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS notes (
 MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN let_go INTEGER NOT NULL DEFAULT 0",  # 1: "let it go"
     "ALTER TABLE sessions ADD COLUMN flow_seconds INTEGER NOT NULL DEFAULT 0",  # 2: time in flow
+    "ALTER TABLE tasks ADD COLUMN nudge TEXT",  # 3: "cut it in half?" (NULL = no offer)
 ]
 
 # Open tasks, newest-touched first. "touched" = last start, or creation if never started.
@@ -53,9 +54,10 @@ _OPEN = """
                (SELECT COALESCE(SUM(seconds), 0) FROM sessions s WHERE s.task_id=t.id),
                (SELECT COUNT(*) FROM sessions s WHERE s.task_id=t.id AND s.started >= ?),
                (SELECT COALESCE(SUM(seconds), 0) FROM sessions s
-                 WHERE s.task_id=t.id AND s.started >= ?)
+                 WHERE s.task_id=t.id AND s.started >= ?),
+               t.nudge
         FROM tasks t WHERE t.done=0 AND t.let_go=0 AND {where}
-    ) WHERE touched >= ? ORDER BY touched DESC LIMIT ?
+    ) WHERE touched >= ? ORDER BY (nudge IS NOT NULL) DESC, touched DESC LIMIT ?
 """
 
 
@@ -96,7 +98,7 @@ class Store:
         since = "" if fresh_days is None else _ago(fresh_days)
         week = _ago(7)
         rows = self.db.execute(_OPEN.format(where=where), (week, week, *args, since, limit)).fetchall()
-        return [Task(r[0], r[1], (r[2] or "").split("\n")[0] or None, r[3], r[5], r[6], r[7])
+        return [Task(r[0], r[1], (r[2] or "").split("\n")[0] or None, r[3], r[5], r[6], r[7], r[8])
                 for r in rows]
 
     def open_tasks(self, limit: int = 5, fresh_days: int | None = 14) -> list[Task]:
@@ -114,6 +116,15 @@ class Store:
     def count_open(self) -> int:
         return self.db.execute(
             "SELECT COUNT(*) FROM tasks WHERE done=0 AND let_go=0").fetchone()[0]
+
+    # ---- "cut it in half?": offered once, on the next open, never repeated
+    def set_nudge(self, task_id: int, step: str) -> None:
+        self.db.execute("UPDATE tasks SET nudge=? WHERE id=?", (step.strip(), task_id))
+        self.db.commit()
+
+    def clear_nudges(self, task_ids) -> None:
+        self.db.executemany("UPDATE tasks SET nudge=NULL WHERE id=?", [(i,) for i in task_ids])
+        self.db.commit()
 
     def rename_task(self, task_id: int, title: str) -> None:
         self.db.execute("UPDATE tasks SET title=? WHERE id=?", (title.strip(), task_id))
@@ -134,6 +145,7 @@ class Store:
             "INSERT INTO sessions(task_id, steps) VALUES (?, ?)",
             (task_id, "\n".join(steps)),
         )
+        self.db.execute("UPDATE tasks SET nudge=NULL WHERE id=?", (task_id,))  # it started
         self.db.commit()
         return Session(cur.lastrowid, task_id, steps)
 

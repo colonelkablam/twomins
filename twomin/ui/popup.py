@@ -8,7 +8,7 @@ import random
 from datetime import datetime
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
@@ -34,6 +34,7 @@ class PickPage(QWidget):
         super().__init__()
         self.store = store
         self.tasks: list[Task] = []
+        self.offered: set[int] = set()     # tasks shown with a "cut it in half?" offer
 
         self.edit = QLineEdit(placeholderText="Type it messy — the whole blurry pile is fine")
         self.list = QListWidget()
@@ -79,6 +80,9 @@ class PickPage(QWidget):
             sub = _task_line(t)
             it = QListWidgetItem(f"{t.title}\n    {sub}")
             it.setData(Qt.UserRole, t)
+            if t.nudge is not None:
+                it.setForeground(QColor(ACCENT))
+                self.offered.add(t.id)
             self.list.addItem(it)
         if self.list.count():
             self.list.setCurrentRow(0)
@@ -153,6 +157,8 @@ def _when(started: str) -> str:
 
 def _task_line(t: Task) -> str:
     """Per-task totals, counted up. This week if there's anything this week, else all time."""
+    if t.nudge is not None:
+        return "✂ try an even smaller step"
     if not t.starts:
         return "not started yet"
     if t.week_starts:
@@ -169,6 +175,9 @@ def _dur(seconds: int | float) -> str:
     return f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d} min"
 
 
+STEP_HINT = "e.g. open laptop, search “car service near me”"
+
+
 class ShrinkPage(QWidget):
     go = Signal(list)
     back = Signal()
@@ -177,7 +186,7 @@ class ShrinkPage(QWidget):
         super().__init__()
         self.store = store
         self.context = _label("", "hint")
-        self.step1 = QLineEdit(placeholderText="e.g. open laptop, search “car service near me”")
+        self.step1 = QLineEdit(placeholderText=STEP_HINT)
         self.step2 = QLineEdit(placeholderText="then… (optional)", objectName="optional")
         self.step3 = QLineEdit(placeholderText="then… (optional)", objectName="optional")
         # The task title is editable in place: click it (or ⇧Tab from the step box).
@@ -201,6 +210,9 @@ class ShrinkPage(QWidget):
         lay.addWidget(self.title_edit)
         lay.addWidget(_label("What's the smallest next physical action?", "title"))
         lay.addWidget(_label("If it feels too small to count, you got it right.", "muted"))
+        self.nudge_lab = _label("", "nudge")
+        self.nudge_lab.hide()
+        lay.addWidget(self.nudge_lab)
         lay.addWidget(self.step1)
         lay.addWidget(_label("Takes less than 2 min? Line up one or two more:", "hint"))
         lay.addWidget(self.step2)
@@ -238,6 +250,7 @@ class ShrinkPage(QWidget):
         self.title_edit.setCursorPosition(0)
         for e in (self.step1, self.step2, self.step3):
             e.clear()
+        self._show_nudge(task)
         self.history = self.store.recent_steps(task.id)
         self.pos = -1
         self._fill_past(task)
@@ -258,6 +271,21 @@ class ShrinkPage(QWidget):
 
     def _boxes(self) -> tuple[QLineEdit, QLineEdit, QLineEdit]:
         return (self.step1, self.step2, self.step3)
+
+    def _show_nudge(self, task: Task) -> None:
+        # Transcript: "If you still didn't start, the step wasn't small enough yet. Cut it in
+        # half again." Worded as an invitation, never as a reminder that it didn't happen.
+        if task.nudge is None:
+            self.nudge_lab.hide()
+            self.step1.setPlaceholderText(STEP_HINT)
+            return
+        if task.nudge:
+            text = f"✂ Make it smaller. Last time: “{task.nudge}”. What's half of that?"
+        else:
+            text = "✂ Make it smaller than feels reasonable: what do your hands do first?"
+        self.nudge_lab.setText(text)
+        self.nudge_lab.show()
+        self.step1.setPlaceholderText("half of it…")
 
     def _rename(self) -> None:
         new = self.title_edit.text().strip()
@@ -325,6 +353,8 @@ class Popup(QWidget):
         self.resize(520, 460)
         self.task: Task | None = None
         self._started = False
+        self._reached: Task | None = None   # last task shown on the actions screen
+        self.store = store
 
         self.pick = PickPage(store)
         self.shrink = ShrinkPage(store, seconds)
@@ -348,6 +378,7 @@ class Popup(QWidget):
 
     def _to_shrink(self, task: Task) -> None:
         self.task = task
+        self._reached = task
         self.shrink.load(task)
         self.stack.setCurrentWidget(self.shrink)
 
@@ -370,5 +401,13 @@ class Popup(QWidget):
         self.close()
 
     def closeEvent(self, ev):
+        # "Cut it in half?" bookkeeping: any offer shown this time is spent (once only); if we
+        # reached the actions screen but didn't start, offer it next time instead.
+        self.store.clear_nudges(self.pick.offered)
+        # Already offered this time and still not started? Leave it: once means once.
+        if (not self._started and self._reached is not None
+                and self._reached.id not in self.pick.offered):
+            same = self.shrink.task is self._reached
+            self.store.set_nudge(self._reached.id, self.shrink.step1.text() if same else "")
         self.closed.emit()
         super().closeEvent(ev)

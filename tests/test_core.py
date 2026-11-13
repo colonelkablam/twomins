@@ -103,6 +103,18 @@ def test_week_totals():
     assert s.open_tasks()[0].title == "Renamed"
 
 
+def test_nudge_once():
+    s = Store(":memory:")
+    a = s.add_task("Book car"); b = s.add_task("Newer task")
+    s.set_nudge(a.id, "  Search garages ")
+    first = s.open_tasks()[0]
+    assert first.id == a.id and first.nudge == "Search garages"      # offered task listed first
+    s.clear_nudges({a.id})
+    assert s.open_tasks()[0].nudge is None
+    s.set_nudge(b.id, ""); s.start_session(b.id, ["tiny"])           # starting clears it
+    assert all(t.nudge is None for t in s.open_tasks())
+
+
 if __name__ == "__main__":
     test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
-    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); print("ok")
+    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_nudge_once(); print("ok")

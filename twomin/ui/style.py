@@ -50,6 +50,7 @@ QPushButton#good {{ background: {GOOD}; color: #000; font-weight: 700; border: n
 QPushButton#stop {{ color: {CALM}; border: 1px solid {CALM}; }}
 QPushButton#round {{ color: {ACCENT}; border: 1px solid {ACCENT}; }}
 QPushButton#flow {{ background: {FLOW}; color: #14101f; font-weight: 700; border: none; }}
+QLabel#nudge {{ color: {ACCENT}; font-size: 10pt; }}
 QLabel#flow {{ color: {FLOW}; font-weight: 600; }}
 QProgressBar {{ background: {PANEL}; border: none; border-radius: 3px; max-height: 6px; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}

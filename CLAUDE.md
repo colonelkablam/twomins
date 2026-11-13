@@ -30,7 +30,7 @@ Key ideas the app must keep:
 | Once started, keeping going is easier than quitting | Flow: "Keep going" turns the timer purple and counts up silently; flow time is recorded and celebrated |
 | Relief comes from starting, not avoiding | "Started ✓" the moment you press Enter; weekly start count on the timer, finish screen, tray |
 | If-then cues (implementation intentions) | **v3**: "If I [cue] → start [task]" |
-| Didn't start? Step wasn't small enough | **v2.1 (next)**: gentle "Cut the step in half?" |
+| Didn't start? Step wasn't small enough | "✂ Make it smaller": offered once, next open, after backing out of the actions screen |
 | Heavy (dread) vs boring | **v4**: optional tag; the app points elsewhere, it doesn't try to fix it |
 
 ## Principles (read before adding any feature)
@@ -165,8 +165,12 @@ Work in this order. Each item should be usable before starting the next.
   notepad, single instance, tray, autostart, Super+T, installer. IBus crash fixed.
 - **v2 (done):** ↑/↓ step history, D any time + undo, schema migrations, focus mode (silent
   count-up), start celebrated immediately + weekly count, short picker list, let it go.
-- **Next (v2.1):** gentle "cut it in half?" when the popup is closed from the Shrink screen
-  without starting: offer once, on the next open, never a blocking dialog.
+- **v2.1 (done):** "cut it in half?". Closing the popup after reaching the actions screen
+  without starting stores `tasks.nudge` (migration 3, the step typed). Next open: that task is
+  listed first in yellow, and its actions screen asks "What's half of that?". Once only: shown
+  offers are cleared on close (`Popup.closeEvent`), a start clears it, and backing out of an
+  offer doesn't create a new one.
+- **Next:** v3 cues.
 - **v3: cues.** If-then plans in the user's own words ("If I sit down after lunch → start
   [task]"), triggered by events the computer can see (login, unlock, first wake of the day)
   rather than clock times; a timed `QTimer`/systemd-timer cue is the fallback. One prompt per
