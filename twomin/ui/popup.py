@@ -10,7 +10,7 @@ from datetime import datetime
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QCheckBox, QMenu, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
+    QMenu, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -18,6 +18,7 @@ from ..core.models import Task
 from ..core.steps import is_vague, split_step
 from ..core.store import Store
 from .style import ACCENT, FLOW, keys
+from .switch import Switch
 
 
 def _label(text: str, name: str = "", wrap: bool = True) -> QLabel:
@@ -53,8 +54,8 @@ def _is_hide(ev) -> bool:
     return ev.key() == Qt.Key_Delete and bool(ev.modifiers() & Qt.ShiftModifier)
 
 
-def _toggle(text: str, key: str, checked: bool, slot) -> QCheckBox:
-    box = QCheckBox(text)
+def _toggle(text: str, key: str, checked: bool, slot) -> Switch:
+    box = Switch(text)
     box.setChecked(checked)
     box.setFocusPolicy(Qt.NoFocus)                 # keys stay in the text box / list
     box.setToolTip(key)

@@ -110,6 +110,15 @@ class MiniTimer(QWidget):
         # --- FINISH: after the beep. The clock keeps counting here.
         fin = QWidget()
         fl = QVBoxLayout(fin)
+        # Context first, as on the running timer: you may have been away when it beeped.
+        ctx = _lab(title, "task", wrap=False)
+        ctx.setToolTip(title)
+        ctx.setText(QFontMetrics(ctx.font()).elidedText(title, Qt.ElideRight, 280))
+        fl.addWidget(ctx)
+        fl.addWidget(_lab(steps[0], "step"))
+        if len(steps) > 1:
+            fl.addWidget(_lab("then: " + "  →  ".join(steps[1:]), "muted"))
+        fl.addSpacing(4)
         fl.addWidget(_lab("You started. ✓", "win"))
         fl.addWidget(_lab(f"That's {week}. Stopping now is a win; "
                           "keep going only if you want to.", "muted"))

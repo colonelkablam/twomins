@@ -83,6 +83,7 @@ twomin/
 ├── ui/
 │   ├── popup.py     # PickPage → ShrinkPage; emits start(task_id, title, steps)
 │   ├── mini.py      # on-top timer: RUN (countdown / focus count-up) → FINISH → UNDO
+│   ├── switch.py    # Switch: a QCheckBox painted as a sliding on/off pill
 │   └── style.py     # tokens, type scale, font loading, QSS (the one place for the look)
 └── assets/          # icon.svg, chime.wav
 tests/test_core.py   # core tests (plain asserts; pytest-compatible)
@@ -127,7 +128,7 @@ beyond what's passed in. Styling only in `ui/style.py`.
   totals: this week's if it has any, otherwise all-time "so far". Never a row of zeros.
 - **At work / personal** (not "spaces": one switch, no lists to manage). `tasks.work` (migration 5);
   new tasks take the current side. "At work" is held only by the running instance
-  (`Controller.at_work`, never saved): unticked on every start, flipped by the picker tick box,
+  (`Controller.at_work`, never saved): unticked on every start, flipped by the picker's switch,
   the tray's "At work" item, or the `set_work` IPC command from a Super+T popup (`status` returns
   it). `_check_sleep()` unticks it after the laptop was asleep > 4 h (a wall-clock jump between
   60 s ticks); inactivity alone doesn't. The picker and search show only the current side; "See
@@ -229,7 +230,7 @@ Work in this order. Each item should be usable before starting the next.
   close-based "you didn't start" offer was tried and removed: closing the popup is ambiguous
   (interrupted, wrong task, just looking), and acting on it felt railroady. Migration 3's
   `tasks.nudge` column is left unused (shipped migrations are never edited).
-- **v2.2 (done):** At work / personal: one tick box (instance-held, resets on restart or a long
+- **v2.2 (done):** At work / personal: one switch (instance-held, resets on restart or a long
   sleep), per-task Personal/Work chip, see all for one popup. Personal is the default.
 - **Next:** v3 cues.
 - **v3: cues.** If-then plans in the user's own words ("If I sit down after lunch → start

@@ -11,7 +11,7 @@ It is a starting tool, not a to-do list. It counts starts, not completions.
 1. **Super+T.** "What are you avoiding?" Type it messy, or pick one from the list (the few
    tasks you've touched in the last two weeks; type to find older ones). Top right: your
    starts, time and flows for the last 7 days.
-   - **At work** (tick box, Alt+W, or the tray menu): shows only work tasks; unticked you
+   - **At work** (switch, Alt+W, or the tray menu): shows only work tasks; unticked you
      see only personal ones. It starts unticked every time the app starts, and unticks itself
      after the laptop has slept for 4+ hours. **See all** (Alt+A) shows both, just this once.
 2. **The actions screen.** The task name is at the top (click it to rename), with a
