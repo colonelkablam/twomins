@@ -26,7 +26,7 @@ Key ideas the app must keep:
 | Real permission to stop when the timer ends | Stopping is **always** a success. No streaks, no failure states, no guilt copy |
 | Go straight in, don't think | Enter starts immediately; no confirmation dialogs |
 | Offload to a sticky pad | `N` opens a notepad in the timer; notes are saved per task and shown next time |
-| Momentum after the beep | Finish: Keep going / Stop here ✓ / Whole task done ✓ |
+| Momentum after the beep | Finish: Keep going / +2 min / Stop for now ✓ (task stays) / Whole task done ✓ (task leaves the list) |
 | Once started, keeping going is easier than quitting | Flow: "Keep going" turns the timer purple and counts up silently; flow time is recorded and celebrated |
 | Relief comes from starting, not avoiding | "Started ✓" the moment you press Enter; weekly start count on the timer, finish screen, tray |
 | If-then cues (implementation intentions) | **v3**: "If I [cue] → start [task]" |

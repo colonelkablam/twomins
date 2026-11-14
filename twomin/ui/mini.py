@@ -101,7 +101,7 @@ class MiniTimer(QWidget):
         rl.addWidget(self.pad)
         self.saved = _lab("", "hint")
         rl.addWidget(self.saved)
-        rl.addWidget(_btn("Stop ✓   Esc", "stop", self._stop))
+        rl.addWidget(_btn("Stop for now ✓   Esc", "stop", self._stop))
         rl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
         rl.addWidget(_lab(keys(("N", "note"), ("drag", "move"), ("⇧S", "also stops")), "keys"))
         self.week_lab = _lab(week, "meta")
@@ -128,7 +128,7 @@ class MiniTimer(QWidget):
         fl.addWidget(_btn("✦ Keep going   ⏎", "flow", self._keep_going))
         rnd = f"{seconds // 60} min" if seconds % 60 == 0 else Countdown.fmt(seconds)
         fl.addWidget(_btn(f"+{rnd}   2", "round", self._another_round))
-        fl.addWidget(_btn("Stop here ✓   Esc", "stop", self._stop))
+        fl.addWidget(_btn("Stop for now ✓   Esc", "stop", self._stop))
         fl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
         fl.addWidget(_lab(keys(("⏎", "keep going, no more beeps"), ("2", "another round")), "keys"))
 

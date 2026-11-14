@@ -28,7 +28,7 @@ It is a starting tool, not a to-do list. It counts starts, not completions.
    - **Keep going**: the window turns purple and counts up silently. That's flow, and it's
      counted as its own reward.
    - **+2 min**: another round with a beep.
-   - **Stop here** (Esc): always a win.
+   - **Stop for now** (Esc): always a win. The task stays in your list for next time.
    - **Whole task done** (⇧D, any time): five seconds to undo with U.
 
 Tasks leave the list when they're done, when they fade (untouched for two weeks), or when you
