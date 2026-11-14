@@ -52,14 +52,19 @@ let them go (⇧Del in the list). History is kept either way.
 Stop is Esc, done needs Shift (⇧D), and the beep doesn't take your keyboard, so a stray key
 typed into another window can't end a session. Super+T brings a running timer forward.
 
-## Install (Fedora GNOME)
+## Install
     git clone git@github.com:colonelkablam/twomins.git ~/Projects/twomins
     cd ~/Projects/twomins && ./install.sh
 
 Installs system packages (asks for sudo), a venv, the app-menu entry, autostart in the tray,
-and the **Super+T** hotkey (change it: `TWOMIN_KEY='<Super><Shift>t' ./install.sh`). The tray
-icon needs the AppIndicator extension, which the installer adds: log out and back in once,
-then run `./install.sh` again.
+and the **Super+T** hotkey (change it: `TWOMIN_KEY='<Super><Shift>t' ./install.sh`).
+
+| | Packages | Super+T and tray | Checked |
+|---|---|---|---|
+| **Fedora** (38+), GNOME | automatic (dnf) | automatic. Tray: log out and back in once after the first install, then run `./install.sh` again | daily use; container test |
+| **Ubuntu** (24.04+), GNOME | automatic (apt) | automatic. Ubuntu's tray support is built in | container test |
+| Ubuntu 22.04 | | | not supported (Python 3.10; needs 3.11+) |
+| Other distros or desktops | skipped, with a list of what to install | menu and autostart work everywhere; set the shortcut by hand (the installer prints the command) | not yet |
 
 ## Update
     cd ~/Projects/twomins && git pull

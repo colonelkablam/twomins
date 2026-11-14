@@ -174,7 +174,17 @@ TWOMIN_KEY='<Super><Shift>t' ./install.sh      # different hotkey
 QT_QPA_PLATFORM=offscreen .venv/bin/twomin     # headless smoke run
 .venv/bin/twomin --quit                        # stop running instance
 ./uninstall.sh                                 # keeps data
+./install.sh --no-desktop                      # packages + venv only (no menu/hotkey/tray)
+scripts/test-distros.sh [image…]               # clean-container install + tests + X11 launch (default: ubuntu:24.04 fedora:44)
 ```
+
+**Installer layout** (`install.sh`): distro adapters (`detect_distro` → `pkgs_/installed_/install_<family>`:
+fedora via dnf, debian/ubuntu via apt), then freedesktop-standard menu + autostart, then desktop
+adapters (`setup_desktop`: GNOME gets the gsettings hotkey + AppIndicator tray). Anything it can't
+do goes into `MANUAL` and is printed at the end; unknown distros/desktops never fail the install.
+To add a distro or desktop, add one case. Run `scripts/test-distros.sh` after changing it.
+Flatpak was considered and parked: its sandbox fights the global hotkey, always-on-top, tray,
+sound and the dev loop.
 
 The install is editable (`pip install -e`), so code changes apply the next time it launches.
 Run `twomin --quit` first to restart the tray instance.
@@ -229,6 +239,7 @@ Work in this order. Each item should be usable before starting the next.
 - **v4: optional heavy/boring tag + counts-up stats.** Starts per week, per task. If most
   starts are tagged heavy, show one quiet line suggesting that dread needs its own approach
   (and a clinician if it's nearly every task), not a score.
+- **Installer: more distros/desktops** (Arch, openSUSE; KDE/Cinnamon hotkeys): one adapter each.
 - **Maybe:** "reopen" a finished task when its title is typed again (keeps notes + step history).
 - **Later: Settings window** (tray menu). Timer length, full reset (wipe the DB, with a backup
   file first), and a deletion tool for tasks (true delete lives here, not in the picker, where
