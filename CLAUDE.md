@@ -125,6 +125,13 @@ beyond what's passed in. Styling only in `ui/style.py`.
   tasks. `let_go` hides a task for good without calling it done.
   The picker's top line shows the last 7 days (starts, time, flows) and each task shows its
   totals: this week's if it has any, otherwise all-time "so far". Never a row of zeros.
+- **At work / personal** (not "spaces": one switch, no lists to manage). `tasks.work` (migration 5);
+  new tasks take the current side. "At work" is held only by the running instance
+  (`Controller.at_work`, never saved): unticked on every start, flipped by the picker tick box,
+  the tray's "At work" item, or the `set_work` IPC command from a Super+T popup (`status` returns
+  it). `_check_sleep()` unticks it after the laptop was asleep > 4 h (a wall-clock jump between
+  60 s ticks); inactivity alone doesn't. The picker and search show only the current side; "See
+  all" (Alt+A) shows both for that popup only. Weekly totals stay combined.
 - **Schema changes:** append to `MIGRATIONS` in `store.py` (never edit a shipped entry). `_migrate()`
   runs them under `BEGIN IMMEDIATE`, because the hotkey process and the instance can open the DB at once.
 
@@ -140,6 +147,7 @@ One scheme across the app. Keep new keys inside it.
 | F2 | rename the highlighted thing (task, or earlier action) |
 | ⇧Del | hide the highlighted thing: "let go" a task, hide an earlier action. Nothing is deleted. Like Shift+Del removing a browser suggestion; only while an action is unedited |
 | Alt+H / Alt+S | step tools: half it / split two actions |
+| Alt+W / Alt+A | work switch for what's in front of you: "At work" in the picker, the task's Personal/Work chip on the actions screen / see all (this popup only) |
 | Ctrl+R | pick a task for me |
 | ⇧D / ⇧S | whole task done / stop (⇧S is an alias for Esc). Not Ctrl+D/Ctrl+S: those mean close and save elsewhere and get pressed by reflex |
 | N · 2 · U | timer only (no text box there): note · another round · undo |
@@ -211,6 +219,8 @@ Work in this order. Each item should be usable before starting the next.
   close-based "you didn't start" offer was tried and removed: closing the popup is ambiguous
   (interrupted, wrong task, just looking), and acting on it felt railroady. Migration 3's
   `tasks.nudge` column is left unused (shipped migrations are never edited).
+- **v2.2 (done):** At work / personal: one tick box (instance-held, resets on restart or a long
+  sleep), per-task Personal/Work chip, see all for one popup. Personal is the default.
 - **Next:** v3 cues.
 - **v3: cues.** If-then plans in the user's own words ("If I sit down after lunch → start
   [task]"), triggered by events the computer can see (login, unlock, first wake of the day)

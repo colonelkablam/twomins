@@ -125,6 +125,18 @@ def test_hide_and_rename_actions():
     assert s.task_totals(a.id) == (3, 180)                              # time still counts
 
 
+def test_work_and_personal_sides():
+    s = Store(":memory:")
+    home = s.add_task("Email the landlord")                  # personal is the default
+    job = s.add_task("Draft the report", work=True)
+    assert [t.title for t in s.open_tasks(work=False)] == ["Email the landlord"]
+    assert [t.title for t in s.open_tasks(work=True)] == ["Draft the report"]
+    assert len(s.open_tasks()) == 2                          # None = see all
+    assert s.search_open("e", work=True)[0].id == job.id and s.count_open(work=False) == 1
+    s.set_work(home.id, True)
+    assert s.count_open(work=True) == 2 and s.open_tasks(work=True)[0].work is True
+
+
 if __name__ == "__main__":
     test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
-    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_step_checks(); test_hide_and_rename_actions(); print("ok")
+    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_step_checks(); test_hide_and_rename_actions(); test_work_and_personal_sides(); print("ok")

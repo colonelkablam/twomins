@@ -10,7 +10,7 @@ from datetime import datetime
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QMenu, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
+    QCheckBox, QMenu, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -53,6 +53,15 @@ def _is_hide(ev) -> bool:
     return ev.key() == Qt.Key_Delete and bool(ev.modifiers() & Qt.ShiftModifier)
 
 
+def _toggle(text: str, key: str, checked: bool, slot) -> QCheckBox:
+    box = QCheckBox(text)
+    box.setChecked(checked)
+    box.setFocusPolicy(Qt.NoFocus)                 # keys stay in the text box / list
+    box.setToolTip(key)
+    box.toggled.connect(slot)
+    return box
+
+
 def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'s' * (n != 1)}"
 
@@ -60,11 +69,19 @@ def _plural(n: int, word: str) -> str:
 class PickPage(QWidget):
     chosen = Signal(object)  # Task
     rename = Signal(object)  # Task: open it with the title ready to edit (F2)
+    work_changed = Signal(bool)
 
-    def __init__(self, store: Store):
+    def __init__(self, store: Store, at_work: bool = False):
         super().__init__()
         self.store = store
         self.tasks: list[Task] = []
+        # One side at a time: personal by default, work when "At work" is ticked. "See all"
+        # shows both, for this popup only.
+        self.at_work = at_work
+        self.see_all = False
+        self.work_box = _toggle("At work", "Alt+W", at_work, self._set_work)
+        self.all_box = _toggle("See all", "Alt+A", False, self._set_all)
+        self.side = _label("", "section")
 
         self.edit = QLineEdit(placeholderText="Type it messy. The whole blurry pile is fine.",
                               objectName="ask")
@@ -81,9 +98,14 @@ class PickPage(QWidget):
         lay.setSpacing(10)
         lay.addLayout(_headed(_label("What are you avoiding?", "hero"), self.week))
         lay.addWidget(self.edit)
-        lay.addSpacing(8)
-        lay.addLayout(_headed(_label("Carry on", "section"), _label(LIST_KEYS % "let go", "meta",
-                                                                    wrap=False)))
+        toggles = QHBoxLayout()
+        toggles.setSpacing(18)
+        toggles.addWidget(self.work_box)
+        toggles.addWidget(self.all_box)
+        toggles.addStretch(1)
+        lay.addLayout(toggles)
+        lay.addSpacing(4)
+        lay.addLayout(_headed(self.side, _label(LIST_KEYS % "let go", "meta", wrap=False)))
         lay.addWidget(self.list, 1)
         lay.addWidget(self.older)
         lay.addWidget(self.status)
@@ -93,6 +115,11 @@ class PickPage(QWidget):
         self.edit.returnPressed.connect(self._enter_from_edit)
         self.list.itemActivated.connect(lambda it: self._choose(it.data(Qt.UserRole)))
         QShortcut(QKeySequence("Ctrl+R"), self, activated=self._random)
+        # Scoped to this page: the actions screen has its own Alt+W (the task's Work chip).
+        QShortcut(QKeySequence("Alt+W"), self, activated=self.work_box.toggle,
+                  context=Qt.WidgetWithChildrenShortcut)
+        QShortcut(QKeySequence("Alt+A"), self, activated=self.all_box.toggle,
+                  context=Qt.WidgetWithChildrenShortcut)
         self.edit.installEventFilter(self)
         self.list.installEventFilter(self)
         self.reload()
@@ -100,9 +127,11 @@ class PickPage(QWidget):
     def reload(self) -> None:
         # Short on purpose: only recently touched tasks show. Older ones fade quietly and
         # are still found by typing (search covers every open task).
-        self.tasks = self.store.open_tasks()
+        side = self._side()
+        self.tasks = self.store.open_tasks(work=side)
         self._show_week()
-        hidden = self.store.count_open() - len(self.tasks)
+        self.side.setText("Everything" if side is None else ("Work" if side else "Personal"))
+        hidden = self.store.count_open(work=side) - len(self.tasks)
         self.older.setText("Older ones: type to find them." if hidden > 0 else "")
         self.older.setVisible(hidden > 0)
         self._filter(self.edit.text())
@@ -110,13 +139,15 @@ class PickPage(QWidget):
     def _filter(self, text: str) -> None:
         self.list.clear()
         needle = text.strip()
-        for t in (self.store.search_open(needle) if needle else self.tasks):
+        for t in (self.store.search_open(needle, work=self._side()) if needle else self.tasks):
             row = QWidget(objectName="row")
             rl = QVBoxLayout(row)
             rl.setContentsMargins(12, 8, 12, 8)
             rl.setSpacing(2)
             rl.addWidget(_label(t.title, "rowtitle", wrap=False))
-            rl.addWidget(_label(_task_line(t), "rowmeta", wrap=False))
+            other = "   (work)" if t.work else "   (personal)"
+            rl.addWidget(_label(_task_line(t) + (other if self.see_all and t.work != self.at_work
+                                                  else ""), "rowmeta", wrap=False))
             it = QListWidgetItem()
             it.setData(Qt.UserRole, t)
             it.setSizeHint(row.sizeHint())
@@ -124,6 +155,18 @@ class PickPage(QWidget):
             self.list.setItemWidget(it, row)
         if self.list.count():
             self.list.setCurrentRow(0)
+
+    def _side(self) -> bool | None:
+        return None if self.see_all else self.at_work
+
+    def _set_work(self, value: bool) -> None:
+        self.at_work = value
+        self.work_changed.emit(value)
+        self.reload()
+
+    def _set_all(self, value: bool) -> None:
+        self.see_all = value
+        self.reload()
 
     def _show_week(self) -> None:
         n, secs = self.store.starts_since(7), self.store.time_since(7)
@@ -167,10 +210,10 @@ class PickPage(QWidget):
             if it:
                 self._choose(it.data(Qt.UserRole))
             return
-        for t in self.store.search_open(text):  # exact match → reuse, don't duplicate
+        for t in self.store.search_open(text):  # exact match (either side) → reuse, don't duplicate
             if t.title.lower() == text.lower():
                 return self._choose(t)
-        self._choose(self.store.add_task(text))
+        self._choose(self.store.add_task(text, work=self.at_work))   # new tasks: current side
 
     def _random(self) -> None:
         if self.tasks:
@@ -265,7 +308,14 @@ class ShrinkPage(QWidget):
 
         lay = QVBoxLayout(self)
         lay.setSpacing(8)
-        lay.addLayout(_headed(self.title_edit, self.tally))      # the task is the hero here
+        # Names the side this task lives on; click or Alt+W to move it to the other side.
+        self.work_chip = QPushButton("Personal", objectName="chip", checkable=True)
+        self.work_chip.setFocusPolicy(Qt.NoFocus)
+        self.work_chip.setToolTip("Personal or work task. Click or Alt+W to switch")
+        self.work_chip.toggled.connect(self._set_task_work)
+        head = _headed(self.title_edit, self.tally)
+        head.insertWidget(1, self.work_chip, 0, Qt.AlignBottom)
+        lay.addLayout(head)                                       # the task is the hero here
         lay.addSpacing(10)
         lay.addWidget(_label("What's the smallest next physical action?", "prompt"))
         lay.addWidget(_label("If it feels too small to count, you got it right.", "meta"))
@@ -322,9 +372,15 @@ class ShrinkPage(QWidget):
         QShortcut(QKeySequence("Alt+H"), self, activated=self._smaller)
         QShortcut(QKeySequence("Alt+S"), self, activated=self._split)
         QShortcut(QKeySequence("F2"), self, activated=self._f2)
+        QShortcut(QKeySequence("Alt+W"), self, activated=self.work_chip.toggle,
+                  context=Qt.WidgetWithChildrenShortcut)
 
     def load(self, task: Task) -> None:
         self.task = task
+        self.work_chip.blockSignals(True)
+        self.work_chip.setChecked(task.work)
+        self.work_chip.setText("Work" if task.work else "Personal")
+        self.work_chip.blockSignals(False)
         self.title_edit.setText(task.title)
         self.title_edit.setCursorPosition(0)
         for e in (self.step1, self.step2, self.step3):
@@ -443,6 +499,12 @@ class ShrinkPage(QWidget):
         self.step1.setFocus()
         self.step1.selectAll()
 
+    def _set_task_work(self, value: bool) -> None:
+        self.work_chip.setText("Work" if value else "Personal")
+        if self.task is not None and self.task.work != value:
+            self.store.set_work(self.task.id, value)
+            self.task.work = value
+
     def _showing_unedited(self) -> bool:
         if not 0 <= self.pos < len(self.history):
             return False
@@ -537,7 +599,9 @@ class Popup(QWidget):
     start = Signal(int, str, list)  # task_id, title, steps
     closed = Signal()
 
-    def __init__(self, store: Store, seconds: int = 120):
+    work_changed = Signal(bool)
+
+    def __init__(self, store: Store, seconds: int = 120, at_work: bool = False):
         super().__init__(None, Qt.Window | Qt.WindowStaysOnTopHint)
         self.setWindowTitle("twomins")
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -545,7 +609,8 @@ class Popup(QWidget):
         self.task: Task | None = None
         self._started = False
 
-        self.pick = PickPage(store)
+        self.pick = PickPage(store, at_work)
+        self.pick.work_changed.connect(self.work_changed)
         self.shrink = ShrinkPage(store, seconds)
         self.stack = QStackedWidget()
         self.stack.addWidget(self.pick)

@@ -31,6 +31,7 @@ BG, PANEL, FG, ACCENT, GOOD = INK, RAISED, TEXT, POLLEN, LEAF
 # ---- type: one family, one scale (pt)
 FONT = "Atkinson Hyperlegible Next"
 FONT_FILE = Path(__file__).parent.parent / "assets" / "AtkinsonHyperlegibleNext.ttf"
+CHECK_SVG = (Path(__file__).parent.parent / "assets" / "check.svg").as_posix()
 KEYS, META, BODY, PROMPT, HERO, CLOCK = 9.5, 10.5, 11.5, 13.5, 20, 40
 
 
@@ -96,6 +97,17 @@ QPushButton#stop {{ color: {CALM}; border: 1px solid {CALM}; }}
 QPushButton#round {{ color: {POLLEN}; border: 1px solid {POLLEN}; }}
 QPushButton#flow {{ background: {FLOW}; color: {FLOW_INK}; font-weight: 700; border: none; }}
 QPushButton#quiet {{ background: transparent; border: none; color: {MUTED}; padding: 8px 4px; }}
+QPushButton#chip {{
+    background: transparent; color: {MUTED}; border: 1px dashed {LINE}; border-radius: 12px;
+    padding: 3px 12px; font-size: {META}pt;
+}}
+QPushButton#chip:checked {{ color: {TEXT}; border: 1px solid {MUTED}; background: {RAISED}; }}
+QCheckBox {{ color: {MUTED}; font-size: {META}pt; spacing: 7px; }}
+QCheckBox:checked {{ color: {TEXT}; }}
+QCheckBox::indicator {{
+    width: 14px; height: 14px; border: 1px solid {MUTED}; border-radius: 4px; background: {RAISED};
+}}
+QCheckBox::indicator:checked {{ background: {TEXT}; border: 1px solid {TEXT}; image: url({CHECK_SVG}); }}
 QPushButton#quiet:hover {{ color: {TEXT}; }}
 
 QLabel#clock {{ font-size: {CLOCK}pt; font-weight: 700; color: {POLLEN}; }}

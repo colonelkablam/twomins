@@ -8,10 +8,14 @@ It is a starting tool, not a to-do list. It counts starts, not completions.
 
 ## How a start goes
 
-1. **Super+T.** "What are you avoiding?" Type it messy, or pick one from *Carry on* (the few
+1. **Super+T.** "What are you avoiding?" Type it messy, or pick one from the list (the few
    tasks you've touched in the last two weeks; type to find older ones). Top right: your
    starts, time and flows for the last 7 days.
-2. **The actions screen.** The task name is at the top (click it to rename). Type the smallest
+   - **At work** (tick box, Alt+W, or the tray menu): shows only work tasks; unticked you
+     see only personal ones. It starts unticked every time the app starts, and unticks itself
+     after the laptop has slept for 4+ hours. **See all** (Alt+A) shows both, just this once.
+2. **The actions screen.** The task name is at the top (click it to rename), with a
+   Personal/Work chip next to it (click or Alt+W to move the task to the other side). Type the smallest
    next physical action. If it feels too small to count, you got it right.
    - Under two minutes? Line up one or two more in the dashed boxes.
    - ↓↑ or click to reuse an earlier action. F2 renames it (typos), ⇧Del hides it from
@@ -40,6 +44,7 @@ let them go (⇧Del in the list). History is kept either way.
 | F2 | rename the highlighted thing (task, or earlier action) |
 | ⇧Del | hide the highlighted thing: "let go" a task, hide an earlier action. Nothing is deleted. Like Shift+Del removing a browser suggestion; only while an action is unedited |
 | Alt+H / Alt+S | step tools: half it / split two actions |
+| Alt+W / Alt+A | work switch for what's in front of you: "At work" in the picker, the task's Personal/Work chip on the actions screen / see all (this popup only) |
 | Ctrl+R | pick a task for me |
 | ⇧D / ⇧S | whole task done / stop (⇧S is an alias for Esc). Not Ctrl+D/Ctrl+S: those mean close and save elsewhere and get pressed by reflex |
 | N · 2 · U | timer only (no text box there): note · another round · undo |

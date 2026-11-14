@@ -65,6 +65,9 @@ def _serve(ctrl, app):
         cmd, reply = msg.get("cmd"), {"ok": True}
         if cmd == "status":
             reply["busy"] = ctrl.busy
+            reply["at_work"] = ctrl.at_work
+        elif cmd == "set_work":
+            ctrl.set_at_work(bool(msg.get("value")))
         elif cmd == "raise" and ctrl.busy:
             ctrl.mini.bring_forward()
         elif cmd == "start":
@@ -126,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         # Client mode: show the popup here, hand the result to the instance.
         ctrl = Controller(app, Store(), seconds, tray=False)
+        ctrl.at_work = bool(status.get("at_work"))       # the instance holds the truth
+        ctrl.sync_work = lambda v: _request({"cmd": "set_work", "value": v})
 
         def hand_off(task_id, title, steps):
             if _request({"cmd": "start", "task_id": task_id, "title": title, "steps": steps}) is None:

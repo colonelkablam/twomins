@@ -1,7 +1,9 @@
 """Wires store + popup + mini timer + tray. The 'instance' process owns timers."""
 from __future__ import annotations
 
-from PySide6.QtCore import QObject
+import time
+
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -23,8 +25,35 @@ class Controller(QObject):
         self.mini: MiniTimer | None = None
         self.popup: Popup | None = None
         self.session_id: int | None = None
+        # "At work": unticked by default, held only in the running app (never saved), so a
+        # restart or login starts personal. sync_work tells the instance when a popup in
+        # another process flips it.
+        self.at_work = False
+        self.sync_work = None
         self.tray = self._make_tray() if tray else None
         self._refresh_stats()
+        if tray or resident:                       # the instance watches for a long sleep
+            self._last_tick = time.time()
+            self._sleep_watch = QTimer(self, interval=60_000, timeout=self._check_sleep)
+            self._sleep_watch.start()
+
+    # ---- at work / personal
+    SLEEP_RESET = 4 * 3600   # asleep longer than this → back to personal
+
+    def set_at_work(self, value: bool) -> None:
+        self.at_work = bool(value)
+        if getattr(self, "_work_action", None) is not None:
+            self._work_action.setChecked(self.at_work)
+        if self.sync_work:
+            self.sync_work(self.at_work)
+
+    def _check_sleep(self, now: float | None = None) -> None:
+        # Timers don't fire while the laptop sleeps, so a big jump in wall-clock time between
+        # ticks means it was asleep. A long sleep (evening, overnight) ends the work day.
+        now = time.time() if now is None else now
+        if now - self._last_tick > self.SLEEP_RESET and self.at_work:
+            self.set_at_work(False)
+        self._last_tick = now
 
     # ---- state the IPC layer asks about
     @property
@@ -39,8 +68,9 @@ class Controller(QObject):
         if self.busy:
             return self.mini.bring_forward()
         if self.popup is None:
-            self.popup = Popup(self.store, self.seconds)
+            self.popup = Popup(self.store, self.seconds, at_work=self.at_work)
             self.popup.start.connect(on_start or self.start)
+            self.popup.work_changed.connect(self.set_at_work)
             self.popup.closed.connect(self._popup_closed)
         self.popup.present()
 
@@ -93,9 +123,12 @@ class Controller(QObject):
         tray.setToolTip("twomins")
         menu = QMenu()
         go = QAction("Start twomins", menu, triggered=lambda: self.show_popup())
+        self._work_action = QAction("At work", menu, checkable=True,
+                                    toggled=lambda v: v != self.at_work and self.set_at_work(v))
         self._stats = QAction("", menu, enabled=False)
         quit_ = QAction("Quit", menu, triggered=self.app.quit)
         menu.addAction(go)
+        menu.addAction(self._work_action)
         menu.addSeparator()
         menu.addAction(self._stats)
         menu.addSeparator()

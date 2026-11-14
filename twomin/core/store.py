@@ -42,6 +42,7 @@ MIGRATIONS = [
     "ALTER TABLE sessions ADD COLUMN flow_seconds INTEGER NOT NULL DEFAULT 0",  # 2: time in flow
     "ALTER TABLE tasks ADD COLUMN nudge TEXT",  # 3: unused (close-based offer was removed)
     "ALTER TABLE sessions ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0",  # 4: hidden from reuse
+    "ALTER TABLE tasks ADD COLUMN work INTEGER NOT NULL DEFAULT 0",  # 5: work side (else personal)
 ]
 
 # Open tasks, newest-touched first. "touched" = last start, or creation if never started.
@@ -56,7 +57,8 @@ _OPEN = """
                (SELECT COALESCE(SUM(seconds), 0) FROM sessions s WHERE s.task_id=t.id),
                (SELECT COUNT(*) FROM sessions s WHERE s.task_id=t.id AND s.started >= ?),
                (SELECT COALESCE(SUM(seconds), 0) FROM sessions s
-                 WHERE s.task_id=t.id AND s.started >= ?)
+                 WHERE s.task_id=t.id AND s.started >= ?),
+               t.work
         FROM tasks t WHERE t.done=0 AND t.let_go=0 AND {where}
     ) WHERE touched >= ? ORDER BY touched DESC LIMIT ?
 """
@@ -90,33 +92,48 @@ class Store:
             raise
 
     # ---- tasks
-    def add_task(self, title: str) -> Task:
-        cur = self.db.execute("INSERT INTO tasks(title) VALUES (?)", (title.strip(),))
+    def add_task(self, title: str, work: bool = False) -> Task:
+        cur = self.db.execute("INSERT INTO tasks(title, work) VALUES (?, ?)",
+                              (title.strip(), int(work)))
         self.db.commit()
-        return Task(cur.lastrowid, title.strip())
+        return Task(cur.lastrowid, title.strip(), work=work)
+
+    def set_work(self, task_id: int, work: bool) -> None:
+        self.db.execute("UPDATE tasks SET work=? WHERE id=?", (int(work), task_id))
+        self.db.commit()
 
     def _query_open(self, where: str, args: tuple, fresh_days: int | None, limit: int) -> list[Task]:
         since = "" if fresh_days is None else _ago(fresh_days)
         week = _ago(7)
         rows = self.db.execute(_OPEN.format(where=where), (week, week, *args, since, limit)).fetchall()
-        return [Task(r[0], r[1], (r[2] or "").split("\n")[0] or None, r[3], r[5], r[6], r[7])
-                for r in rows]
+        return [Task(r[0], r[1], (r[2] or "").split("\n")[0] or None, r[3], r[5], r[6], r[7],
+                     bool(r[8])) for r in rows]
 
-    def open_tasks(self, limit: int = 5, fresh_days: int | None = 14) -> list[Task]:
+    @staticmethod
+    def _side(work: bool | None) -> tuple[str, tuple]:
+        """SQL filter for one side (work / personal), or both when `work` is None."""
+        return ("1", ()) if work is None else ("t.work=?", (int(work),))
+
+    def open_tasks(self, limit: int = 5, fresh_days: int | None = 14,
+                   work: bool | None = None) -> list[Task]:
         """The short list the picker shows: recently touched open tasks only.
 
         Older ones quietly fade from view (never flagged) but stay findable by typing.
+        `work`: True = work side, False = personal, None = both.
         """
-        return self._query_open("1", (), fresh_days, limit)
+        where, args = self._side(work)
+        return self._query_open(where, args, fresh_days, limit)
 
-    def search_open(self, text: str, limit: int = 20) -> list[Task]:
-        """All open tasks whose title contains `text` (case-insensitive), faded ones included."""
+    def search_open(self, text: str, limit: int = 20, work: bool | None = None) -> list[Task]:
+        """Open tasks whose title contains `text` (case-insensitive), faded ones included."""
         like = "%" + text.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        return self._query_open("t.title LIKE ? ESCAPE '\\'", (like,), None, limit)
+        side, args = self._side(work)
+        return self._query_open(f"t.title LIKE ? ESCAPE '\\' AND {side}", (like, *args), None, limit)
 
-    def count_open(self) -> int:
+    def count_open(self, work: bool | None = None) -> int:
+        side, args = self._side(work)
         return self.db.execute(
-            "SELECT COUNT(*) FROM tasks WHERE done=0 AND let_go=0").fetchone()[0]
+            f"SELECT COUNT(*) FROM tasks t WHERE done=0 AND let_go=0 AND {side}", args).fetchone()[0]
 
     def rename_task(self, task_id: int, title: str) -> None:
         self.db.execute("UPDATE tasks SET title=? WHERE id=?", (title.strip(), task_id))

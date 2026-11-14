@@ -12,6 +12,7 @@ class Task:
     seconds: int = 0          # all time on this task
     week_starts: int = 0      # last 7 days
     week_seconds: int = 0
+    work: bool = False        # which side it lives on: work, or personal (the default)
 
 
 @dataclass
