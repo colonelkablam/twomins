@@ -7,8 +7,8 @@ from __future__ import annotations
 import random
 from datetime import datetime
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMenu, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from ..core.models import Task
 from ..core.steps import is_vague, split_step
 from ..core.store import Store
-from .style import ACCENT, FLOW, keys
+from .style import ACCENT, FLOW, GEAR_SVG, keys
 from .switch import Switch
 
 
@@ -94,6 +94,12 @@ class PickPage(QWidget):
         footer = _label(keys(("⏎", "choose"), ("↓↑", "list"), ("Ctrl+R", "pick for me"),
                              ("Esc", "close")), "keys")
         footer.setTextFormat(Qt.RichText)
+        gear = QPushButton(objectName="gear")
+        gear.setIcon(QIcon(str(GEAR_SVG)))
+        gear.setIconSize(QSize(18, 18))
+        gear.setFocusPolicy(Qt.NoFocus)
+        gear.setToolTip("Settings (Ctrl+,)")
+        gear.clicked.connect(self._open_settings)
 
         lay = QVBoxLayout(self)
         lay.setSpacing(10)
@@ -110,12 +116,16 @@ class PickPage(QWidget):
         lay.addWidget(self.list, 1)
         lay.addWidget(self.older)
         lay.addWidget(self.status)
-        lay.addWidget(footer)
+        bottom = QHBoxLayout()
+        bottom.addWidget(footer, 1)
+        bottom.addWidget(gear)                     # settings: in the corner, out of the way
+        lay.addLayout(bottom)
 
         self.edit.textChanged.connect(self._filter)
         self.edit.returnPressed.connect(self._enter_from_edit)
         self.list.itemActivated.connect(lambda it: self._choose(it.data(Qt.UserRole)))
         QShortcut(QKeySequence("Ctrl+R"), self, activated=self._random)
+        QShortcut(QKeySequence("Ctrl+,"), self, activated=self._open_settings)
         # Scoped to this page: the actions screen has its own Alt+W (the task's Work chip).
         QShortcut(QKeySequence("Alt+W"), self, activated=self.work_box.toggle,
                   context=Qt.WidgetWithChildrenShortcut)
@@ -156,6 +166,12 @@ class PickPage(QWidget):
             self.list.setItemWidget(it, row)
         if self.list.count():
             self.list.setCurrentRow(0)
+
+    def _open_settings(self) -> None:
+        from .settings import Settings
+        self._settings = Settings(self.store, self.window())
+        self._settings.data_reset.connect(self.reload)
+        self._settings.open()
 
     def _side(self) -> bool | None:
         return None if self.see_all else self.at_work

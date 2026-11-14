@@ -74,6 +74,7 @@ class Store:
         path = Path(path) if path else default_path()
         if str(path) != ":memory:":
             path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
         self.db = sqlite3.connect(str(path), timeout=5)
         self.db.executescript(SCHEMA)
         self._migrate()
@@ -209,6 +210,28 @@ class Store:
                 (session_id,),
             )
         self.db.commit()
+
+    # ---- settings: reset everything (a backup copy is always made first)
+    def backup_dir(self) -> Path:
+        base = Path(self.path).parent if str(self.path) != ":memory:" else Path.cwd()
+        return base / "backups"
+
+    def reset(self, backup_dir: Path | None = None) -> Path:
+        """Back up the whole database, then delete every task, start and note.
+
+        Returns the backup file. Schema and migrations stay, so the app carries on as new.
+        """
+        folder = Path(backup_dir) if backup_dir else self.backup_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        dest = folder / f"twomin-{datetime.now():%Y%m%d-%H%M%S}.db"
+        out = sqlite3.connect(str(dest))
+        try:
+            self.db.backup(out)
+        finally:
+            out.close()
+        self.db.executescript("DELETE FROM notes; DELETE FROM sessions; DELETE FROM tasks;")
+        self.db.commit()
+        return dest
 
     def close_orphans(self) -> int:
         """End sessions left open by a crash or logout. They still count as starts.

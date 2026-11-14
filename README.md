@@ -27,7 +27,7 @@ It is a starting tool, not a to-do list. It counts starts, not completions.
 4. **The beep.** The clock keeps counting while you choose (or ignore it):
    - **Keep going**: the window turns purple and counts up silently. That's flow, and it's
      counted as its own reward.
-   - **+2 min**: another round with a beep.
+   - **+2 min** (+): another round with a beep.
    - **Stop for now** (Esc): always a win. The task stays in your list for next time.
    - **Whole task done** (⇧D, any time): five seconds to undo with U.
 
@@ -46,8 +46,9 @@ let them go (⇧Del in the list). History is kept either way.
 | Alt+H / Alt+S | step tools: half it / split two actions |
 | Alt+W / Alt+A | work switch for what's in front of you: "At work" in the picker, the task's Personal/Work chip on the actions screen / see all (this popup only) |
 | Ctrl+R | pick a task for me |
+| Ctrl+, | settings (also the ⚙ in the picker's corner and the tray menu) |
 | ⇧D / ⇧S | whole task done / stop (⇧S is an alias for Esc). Not Ctrl+D/Ctrl+S: those mean close and save elsewhere and get pressed by reflex |
-| N · 2 · U | timer only (no text box there): note · another round · undo |
+| N · + · U | timer only (no text box there): note · another round (= and 2 work too) · undo |
 
 Stop is Esc, done needs Shift (⇧D), and the beep doesn't take your keyboard, so a stray key
 typed into another window can't end a session. Super+T brings a running timer forward.
@@ -75,6 +76,12 @@ first launch. Re-run `./install.sh` only if the installer itself changed.
 
 Quick test without waiting two minutes: `.venv/bin/twomin --quit; .venv/bin/twomin --seconds 10`
 (then restart the tray as above).
+
+## Settings and reset
+⚙ in the picker's bottom-right corner, **Settings…** in the tray menu, or Ctrl+, . **Reset all
+data** deletes every task, start and note; you have to type `clear data` first, and a backup
+copy is always saved to `~/.local/share/twomin/backups/twomin-<date>-<time>.db`. To undo a
+reset, quit twomins and copy that file back over `~/.local/share/twomin/twomin.db`.
 
 ## Config and data
 - `~/.config/twomin/config.toml`: `seconds = 120`

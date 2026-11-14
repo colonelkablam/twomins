@@ -115,6 +115,16 @@ class Controller(QObject):
         if not self.keep_alive():
             self.app.quit()
 
+    def show_settings(self) -> None:
+        from .ui.settings import Settings
+        if self.busy:                      # never reset under a running timer
+            return self.mini.bring_forward()
+        self._settings = Settings(self.store)
+        self._settings.data_reset.connect(self._refresh_stats)
+        self._settings.show()
+        self._settings.raise_()
+        self._settings.activateWindow()
+
     # ---- tray (GNOME needs the AppIndicator extension; app works without it)
     def _make_tray(self) -> QSystemTrayIcon | None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -127,11 +137,13 @@ class Controller(QObject):
                                     toggled=lambda v: v != self.at_work and self.set_at_work(v))
         self._stats = QAction("", menu, enabled=False)
         quit_ = QAction("Quit", menu, triggered=self.app.quit)
+        settings = QAction("Settings…", menu, triggered=self.show_settings)
         menu.addAction(go)
         menu.addAction(self._work_action)
         menu.addSeparator()
         menu.addAction(self._stats)
         menu.addSeparator()
+        menu.addAction(settings)
         menu.addAction(quit_)
         menu.aboutToShow.connect(self._refresh_stats)
         tray.setContextMenu(menu)

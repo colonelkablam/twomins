@@ -21,6 +21,7 @@ FAINT = "#646679"      # key-hint footer
 POLLEN = "#f2b134"     # starting: countdown, start button, focus ring
 LEAF = "#5cc98a"       # whole task done
 CALM = "#7fb3e6"       # stop: resting is allowed (never red)
+DANGER = "#e08a8a"     # deleting data (Settings → reset) and nothing else
 FLOW = "#a78bfa"       # flow: its own reward
 FLOW_INK = "#211a36"
 FLOW_RAISED = "#2e2550"
@@ -31,6 +32,7 @@ BG, PANEL, FG, ACCENT, GOOD = INK, RAISED, TEXT, POLLEN, LEAF
 # ---- type: one family, one scale (pt)
 FONT = "Atkinson Hyperlegible Next"
 FONT_FILE = Path(__file__).parent.parent / "assets" / "AtkinsonHyperlegibleNext.ttf"
+GEAR_SVG = Path(__file__).parent.parent / "assets" / "gear.svg"
 KEYS, META, BODY, PROMPT, HERO, CLOCK = 9.5, 10.5, 11.5, 13.5, 20, 40
 
 
@@ -102,6 +104,27 @@ QPushButton#chip {{
 }}
 QPushButton#chip:checked {{ color: {TEXT}; border: 1px solid {MUTED}; background: {RAISED}; }}
 QPushButton#quiet:hover {{ color: {TEXT}; }}
+QPushButton#gear {{ background: transparent; border: none; border-radius: 8px; padding: 5px; }}
+QPushButton#gear:hover {{ background: {RAISED}; }}
+QPushButton#danger {{ color: {DANGER}; border: 1px solid {DANGER}; }}
+QPushButton#danger:disabled {{ color: {FAINT}; border: 1px solid {LINE}; }}
+
+/* Buttons with a keycap: the label takes the button's colour; the key sits in a small box */
+QPushButton QLabel {{ background: transparent; }}
+QPushButton QLabel#btntext {{ font-size: {BODY}pt; }}
+QPushButton#good QLabel#btntext, QPushButton#flow QLabel#btntext {{ font-weight: 700; color: {INK}; }}
+QPushButton#stop QLabel#btntext {{ color: {CALM}; }}
+QPushButton#round QLabel#btntext {{ color: {POLLEN}; }}
+QLabel#keycap {{
+    font-size: {KEYS}pt; color: {MUTED}; border: 1px solid {LINE}; border-radius: 5px;
+    padding: 1px 6px; min-width: 10px; min-height: 16px; max-height: 18px;
+    qproperty-alignment: AlignCenter;
+}}
+QPushButton#good QLabel#keycap, QPushButton#flow QLabel#keycap {{
+    color: {INK}; border: 1px solid rgba(23, 24, 31, 0.35);
+}}
+QPushButton#stop QLabel#keycap {{ color: {CALM}; border: 1px solid rgba(127, 179, 230, 0.45); }}
+QPushButton#round QLabel#keycap {{ color: {POLLEN}; border: 1px solid rgba(242, 177, 52, 0.45); }}
 
 QLabel#clock {{ font-size: {CLOCK}pt; font-weight: 700; color: {POLLEN}; }}
 QLabel#step {{ font-size: {PROMPT}pt; font-weight: 600; }}
@@ -122,5 +145,6 @@ QLabel#clock {{ color: {FLOW}; }}
 QLabel#flow {{ color: {FLOW}; font-weight: 600; }}
 QPushButton {{ background: {FLOW_RAISED}; }}
 QPushButton#good {{ background: {LEAF}; }}
+QPushButton QLabel {{ background: transparent; }}
 QLineEdit {{ background: {FLOW_RAISED}; border: 1px solid {FLOW}; }}
 """

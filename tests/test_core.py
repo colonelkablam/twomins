@@ -137,6 +137,20 @@ def test_work_and_personal_sides():
     assert s.count_open(work=True) == 2 and s.open_tasks(work=True)[0].work is True
 
 
+def test_reset_backs_up_first():
+    import tempfile
+    from pathlib import Path
+    folder = Path(tempfile.mkdtemp())
+    s = Store(folder / "twomin.db")
+    a = s.add_task("x"); ss = s.start_session(a.id, ["y"]); s.end_session(ss.id, 60, 0, STOPPED)
+    s.add_note(a.id, ss.id, "note")
+    backup = s.reset()
+    assert backup.parent == folder / "backups" and backup.exists()
+    assert s.count_open() == 0 and s.starts_since() == 0 and s.notes_for(a.id) == []
+    old = Store(backup)                                     # the backup has everything
+    assert old.count_open() == 1 and old.notes_for(a.id) == ["note"]
+
+
 if __name__ == "__main__":
     test_countdown(); test_store(); test_recent_steps(); test_close_orphans()
-    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_step_checks(); test_hide_and_rename_actions(); test_work_and_personal_sides(); print("ok")
+    test_migrates_old_db(); test_short_list_search_and_let_go(); test_flows_counted(); test_week_totals(); test_step_checks(); test_hide_and_rename_actions(); test_work_and_personal_sides(); test_reset_backs_up_first(); print("ok")

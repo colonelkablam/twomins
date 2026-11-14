@@ -84,6 +84,7 @@ twomin/
 │   ├── popup.py     # PickPage → ShrinkPage; emits start(task_id, title, steps)
 │   ├── mini.py      # on-top timer: RUN (countdown / focus count-up) → FINISH → UNDO
 │   ├── switch.py    # Switch: a QCheckBox painted as a sliding on/off pill
+│   ├── settings.py  # Settings window: reset all data (typed "clear data", backup first)
 │   └── style.py     # tokens, type scale, font loading, QSS (the one place for the look)
 └── assets/          # icon.svg, chime.wav
 tests/test_core.py   # core tests (plain asserts; pytest-compatible)
@@ -109,10 +110,13 @@ beyond what's passed in. Styling only in `ui/style.py`.
 - **Look** (`ui/style.py`): one hero per screen (picker question, task name on the actions
   screen, the timer clock); type scale `KEYS/META/BODY/PROMPT/HERO/CLOCK`; bundled font
   Atkinson Hyperlegible Next (`assets/`, OFL, loaded by `load_fonts()`); key hints are a quiet
-  footer built with `keys()`; dashed boxes = optional; a yellow left bar = selected row.
+  footer built with `keys()`; on buttons the key is a small keycap (`_btn(..., key=)` in
+  `mini.py`, `QLabel#keycap`), never run into the label; dashed boxes = optional; a yellow left bar
+  = selected row.
 - **Colours mean states** (all in `ui/style.py`): yellow = starting (countdown, +2 round),
   calm blue = stop (never red: stopping isn't failing), green = whole task done, purple = flow.
   Entering flow sets `FLOW_QSS` on the timer window so the whole window turns purple.
+  `DANGER` (muted red) is used only for deleting data in Settings.
 - **Flow is a second reward:** `sessions.flow_seconds` (migration 2) records time in flow;
   `flows_since()` feeds "N starts · M flows this week" (tray, timer, notifications).
 - **Task → actions:** a task is the blurry pile; each session is one start holding the 1–3
@@ -150,8 +154,9 @@ One scheme across the app. Keep new keys inside it.
 | Alt+H / Alt+S | step tools: half it / split two actions |
 | Alt+W / Alt+A | work switch for what's in front of you: "At work" in the picker, the task's Personal/Work chip on the actions screen / see all (this popup only) |
 | Ctrl+R | pick a task for me |
+| Ctrl+, | settings (also the ⚙ in the picker's corner and the tray menu) |
 | ⇧D / ⇧S | whole task done / stop (⇧S is an alias for Esc). Not Ctrl+D/Ctrl+S: those mean close and save elsewhere and get pressed by reflex |
-| N · 2 · U | timer only (no text box there): note · another round · undo |
+| N · + · U | timer only (no text box there): note · another round (= and 2 work too) · undo |
 
 Single-letter keys are handled in `MiniTimer.keyPressEvent`, **not** with `QShortcut`.
 Otherwise typing in the notepad would trigger them. Ending a session (stop/done) needs **Shift**,
@@ -242,9 +247,10 @@ Work in this order. Each item should be usable before starting the next.
   (and a clinician if it's nearly every task), not a score.
 - **Installer: more distros/desktops** (Arch, openSUSE; KDE/Cinnamon hotkeys): one adapter each.
 - **Maybe:** "reopen" a finished task when its title is typed again (keeps notes + step history).
-- **Later: Settings window** (tray menu). Timer length, full reset (wipe the DB, with a backup
-  file first), and a deletion tool for tasks (true delete lives here, not in the picker, where
-  Del only "lets go"). Keep it out of the start flow.
+- **Settings window (started):** ⚙ in the picker corner, tray "Settings…", Ctrl+, . Has: reset all
+  data (`Store.reset()`: sqlite backup to `backups/`, then delete rows; typed "clear data" to
+  unlock; refused while a timer runs). **Later in it:** timer length, a true-delete tool for
+  single tasks (the picker only "lets go"). Keep it out of the start flow.
 
 ## Known gaps
 

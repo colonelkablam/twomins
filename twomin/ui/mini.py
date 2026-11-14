@@ -15,7 +15,7 @@ from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer,
 from PySide6.QtGui import QFontMetrics, QGuiApplication
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
-    QFrame, QLabel, QLineEdit, QProgressBar, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QLineEdit, QProgressBar, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ..core.models import DONE, EARLY, STOPPED
@@ -35,11 +35,25 @@ def _lab(text: str, name: str, wrap: bool = True) -> QLabel:
     return lab
 
 
-def _btn(text: str, name: str = "", slot=None) -> QPushButton:
-    b = QPushButton(text, objectName=name)
+def _btn(text: str, name: str = "", slot=None, key: str = "") -> QPushButton:
+    """A button whose key is drawn as a small keycap on the right, not run into the label."""
+    b = QPushButton(objectName=name)
     b.setFocusPolicy(Qt.NoFocus)        # keys always go to the timer itself
     if slot:
         b.clicked.connect(slot)
+    if not key:
+        b.setText(text)
+        return b
+    row = QHBoxLayout(b)
+    row.setContentsMargins(14, 0, 10, 0)
+    label, cap = QLabel(text, objectName="btntext"), QLabel(key, objectName="keycap")
+    for w in (label, cap):
+        w.setAttribute(Qt.WA_TransparentForMouseEvents)   # clicks go to the button
+    row.addStretch(1)
+    row.addWidget(label)
+    row.addStretch(1)
+    row.addWidget(cap, 0, Qt.AlignVCenter)
+    b.setMinimumHeight(QPushButton("Xg").sizeHint().height() + 4)
     return b
 
 
@@ -101,8 +115,8 @@ class MiniTimer(QWidget):
         rl.addWidget(self.pad)
         self.saved = _lab("", "hint")
         rl.addWidget(self.saved)
-        rl.addWidget(_btn("Stop for now ✓   Esc", "stop", self._stop))
-        rl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
+        rl.addWidget(_btn("Stop for now ✓", "stop", self._stop, "Esc"))
+        rl.addWidget(_btn("Whole task done ✓", "good", self._done, "⇧D"))
         rl.addWidget(_lab(keys(("N", "note"), ("drag", "move"), ("⇧S", "also stops")), "keys"))
         self.week_lab = _lab(week, "meta")
         rl.addWidget(self.week_lab)
@@ -125,19 +139,19 @@ class MiniTimer(QWidget):
         self.over_lab = _lab("", "step")
         self.over_lab.setAlignment(Qt.AlignCenter)
         fl.addWidget(self.over_lab)
-        fl.addWidget(_btn("✦ Keep going   ⏎", "flow", self._keep_going))
+        fl.addWidget(_btn("✦ Keep going", "flow", self._keep_going, "⏎"))
         rnd = f"{seconds // 60} min" if seconds % 60 == 0 else Countdown.fmt(seconds)
-        fl.addWidget(_btn(f"+{rnd}   2", "round", self._another_round))
-        fl.addWidget(_btn("Stop for now ✓   Esc", "stop", self._stop))
-        fl.addWidget(_btn("Whole task done ✓   ⇧D", "good", self._done))
-        fl.addWidget(_lab(keys(("⏎", "keep going, no more beeps"), ("2", "another round")), "keys"))
+        fl.addWidget(_btn(f"+{rnd}", "round", self._another_round, "+"))
+        fl.addWidget(_btn("Stop for now ✓", "stop", self._stop, "Esc"))
+        fl.addWidget(_btn("Whole task done ✓", "good", self._done, "⇧D"))
+        fl.addWidget(_lab(keys(("⏎", "keep going, no more beeps"), ("+", "another round")), "keys"))
 
         # --- UNDO: a short grace period after "done"
         und = QWidget()
         ul = QVBoxLayout(und)
         ul.addWidget(_lab("Started and finished ✓", "win"))
         ul.addWidget(_lab(f"Whole task done. {week}.", "muted"))
-        ul.addWidget(_btn("Undo   U", slot=self._undo))
+        ul.addWidget(_btn("Undo", slot=self._undo, key="U"))
         ul.addWidget(_lab(keys(("U or Esc", "undo"), ("⏎", "close now")) + "&nbsp;&nbsp;&nbsp;&nbsp;closes in a moment", "keys"))
         self.undo_timer = QTimer(self, singleShot=True, interval=UNDO_MS,
                                  timeout=lambda: self._finish(DONE))
